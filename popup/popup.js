@@ -7,17 +7,28 @@ document.addEventListener('DOMContentLoaded', refreshUI);
 async function refreshUI() {
   try {
     const config = await chrome.storage.local.get([
-      'enabled', 'activeBanks', 'autoMode', 'matchThreshold'
+      'mode', 'activeBanks', 'autoMode', 'matchThreshold'
     ]);
 
-    const enabled = config.enabled || false;
+    const mode = config.mode || 'off';
     const dot = document.getElementById('statusDot');
-    dot.className = enabled ? 'status-dot active' : 'status-dot';
 
-    document.getElementById('statusTitle').textContent = enabled ? '运行中' : '未开启';
-    document.getElementById('statusSub').textContent = enabled
-      ? '按 Ctrl+Shift+E 关闭'
-      : '按 Ctrl+Shift+E 开启';
+    if (mode === 'stealth') {
+      dot.className = 'status-dot active';
+      dot.style.background = '#f59e0b';  // 黄色 = 隐形
+      document.getElementById('statusTitle').textContent = '隐形运行中';
+      document.getElementById('statusSub').textContent = '无界面 · Ctrl+Shift+H 关闭';
+    } else if (mode === 'normal') {
+      dot.className = 'status-dot active';
+      dot.style.background = '#10b981';
+      document.getElementById('statusTitle').textContent = '运行中';
+      document.getElementById('statusSub').textContent = 'Ctrl+Shift+H 切换隐形';
+    } else {
+      dot.className = 'status-dot';
+      dot.style.background = '#ef4444';
+      document.getElementById('statusTitle').textContent = '未开启';
+      document.getElementById('statusSub').textContent = 'Ctrl+Shift+E 普通 · Ctrl+Shift+H 隐形';
+    }
 
     document.getElementById('infoMode').textContent =
       (config.autoMode === 'manual') ? '手动辅助' : '普通（自动勾选）';
@@ -32,13 +43,10 @@ async function refreshUI() {
   }
 }
 
-/** 打开题库管理（通过background转发到当前tab的内容脚本） */
 function openBankManager() {
   chrome.runtime.sendMessage({ action: 'showBankManager' });
 }
 
-/** 打开设置面板（目前为空，可后续扩展） */
 function openSettings() {
-  // 设置已在页面内通过快捷键入口覆盖，此处预留
   chrome.runtime.sendMessage({ action: 'showBankManager' });
 }

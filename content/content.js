@@ -2,44 +2,40 @@
  * content.js - 主控入口
  * 依赖：所有content/模块
  *
- * 职责：开关控制、模块协调、自动答题调度、消息通信
+ * 三态模式：'off' | 'normal' | 'stealth'
+ * - off: 完全关闭，无任何DOM注入
+ * - normal: 普通模式，显示悬浮窗，自动答题
+ * - stealth: 隐形模式，仅自动答题，无任何界面
  */
 
 const ExamHelper = {
 
-  _enabled: false,
+  _mode: 'off',       // 'off' | 'normal' | 'stealth'
   _questions: [],
   _matchResults: [],
   _banks: [],
-  _mode: 'normal',  // 'normal' | 'manual'
+  _answerMode: 'normal', // 'normal' | 'manual'（普通模式下子模式）
   _observer: null,
   _initialized: false,
 
-  /** 初始化（页面加载时自动执行一次） */
+  /** 初始化 */
   async init() {
     if (this._initialized) return;
     this._initialized = true;
 
-    // 从 storage 恢复状态
     try {
-      const config = await chrome.storage.local.get([
-        'enabled', 'matchThreshold', 'activeBanks', 'autoMode'
-      ]);
-      this._mode = config.autoMode || 'normal';
-    } catch(e) { /* 忽略 */ }
+      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode']);
+      this._answerMode = config.autoMode || 'normal';
+    } catch(e) { /* ignore */ }
 
     // 监听来自 background 的消息
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (msg.action === 'toggle') {
-        if (msg.enabled) {
-          this.enable();
-        } else {
-          this.disable();
-        }
+      if (msg.action === 'setMode') {
+        this._setMode(msg.mode);
         sendResponse({ success: true });
       }
       if (msg.action === 'getState') {
-        sendResponse({ enabled: this._enabled, mode: this._mode });
+        sendResponse({ mode: this._mode, answerMode: this._answerMode });
       }
       if (msg.action === 'showBankManager') {
         BankManager.show();
@@ -48,29 +44,42 @@ const ExamHelper = {
     });
   },
 
-  /** 开启插件 */
-  async enable() {
-    if (this._enabled) return;
-    this._enabled = true;
+  /** 模式切换核心 */
+  async _setMode(newMode) {
+    const prevMode = this._mode;
+    if (prevMode === newMode) return;
+    this._mode = newMode;
 
-    // 创建UI
+    if (newMode === 'off') {
+      this._disable();
+    } else if (newMode === 'normal') {
+      this._enableNormal();
+    } else if (newMode === 'stealth') {
+      this._enableStealth();
+    }
+  },
+
+  /** 普通模式：悬浮窗 + 自动答题 */
+  async _enableNormal() {
     FloatPanel.create();
-    FloatPanel.updateStatus(true, 0);
-
-    // 加载激活题库
     await this._loadBanks();
     FloatPanel.updateStatus(true, this._banks.length);
-
-    // 执行识别
     await this._scanAndAnswer();
-
-    // 监听页面变化（翻页/滚动加载）
     this._startObserver();
   },
 
-  /** 关闭插件 */
-  disable() {
-    this._enabled = false;
+  /** 隐形模式：仅自动答题，无界面 */
+  async _enableStealth() {
+    // 先清理旧界面
+    FloatPanel.destroy();
+    BankManager.destroy();
+    await this._loadBanks();
+    await this._scanAndAnswer();
+    this._startObserver();
+  },
+
+  /** 完全关闭 */
+  _disable() {
     FloatPanel.destroy();
     BankManager.destroy();
     if (this._observer) {
@@ -102,13 +111,13 @@ const ExamHelper = {
 
   /** 扫描并作答 */
   async _scanAndAnswer() {
-    if (!this._enabled) return;
+    if (this._mode === 'off') return;
 
     // 识别题目
     this._questions = QuestionFinder.findAll();
 
     if (this._questions.length === 0) {
-      FloatPanel.showIdle();
+      if (this._mode === 'normal') FloatPanel.showIdle();
       return;
     }
 
@@ -119,9 +128,12 @@ const ExamHelper = {
     const threshold = await this._getThreshold();
     this._matchResults = Matcher.matchAll(this._questions, this._banks, threshold);
 
-    if (this._mode === 'normal') {
+    if (this._answerMode === 'normal') {
       await this._autoAnswer();
-      // 更新悬浮窗状态，显示纠错统计
+    }
+
+    // 仅普通模式显示悬浮窗
+    if (this._mode === 'normal') {
       if (this._lastStats) {
         const { corrected, filled } = this._lastStats;
         const status = document.getElementById('__leh_status__');
@@ -134,15 +146,11 @@ const ExamHelper = {
           }
         }
       }
+      if (this._matchResults.length > 0) {
+        FloatPanel.showResult(this._questions[0], this._matchResults[0]);
+      }
+      this._bindHoverEvents();
     }
-
-    // 显示第一条结果
-    if (this._matchResults.length > 0) {
-      FloatPanel.showResult(this._questions[0], this._matchResults[0]);
-    }
-
-    // 绑定hover事件
-    this._bindHoverEvents();
   },
 
   /** 自动作答（含已选纠错） */
@@ -284,7 +292,7 @@ const ExamHelper = {
       const container = mr.question.container;
 
       container.addEventListener('mouseenter', () => {
-        if (!this._enabled) return;
+        if (this._mode !== 'normal') return;
         FloatPanel.showResult(mr.question, mr);
       });
 
@@ -300,7 +308,7 @@ const ExamHelper = {
 
     this._observer = new MutationObserver(
       Helpers.debounce(() => {
-        if (this._enabled) this._scanAndAnswer();
+        if (this._mode !== 'off') this._scanAndAnswer();
       }, 1000)
     );
 

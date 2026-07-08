@@ -51,7 +51,13 @@
       "suggested_key": {
         "default": "Ctrl+Shift+E"
       },
-      "description": "开启/关闭答题助手"
+      "description": "普通模式开关（含悬浮窗）"
+    },
+    "toggle-stealth": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+H"
+      },
+      "description": "隐形模式开关（纯后台作答，无界面）"
     }
   }
 }

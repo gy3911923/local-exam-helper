@@ -1,15 +1,15 @@
 /**
  * background.js - Service Worker
- * 职责：快捷键监听、全局状态管理、tab消息中转
+ * 职责：快捷键监听、三态管理(off/normal/stealth)、tab消息中转
  */
 
-// 全局状态：每个tab的插件开关状态
+// 三态：'off' | 'normal' | 'stealth'
 const tabStates = {};
 
 // 初始化存储默认值
 chrome.runtime.onInstalled.addListener(async () => {
   const defaults = {
-    enabled: false,
+    mode: 'off',  // off | normal | stealth
     matchThreshold: 0.7,
     activeBanks: [],
     bankPriorities: {},
@@ -26,51 +26,60 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // 快捷键监听
 chrome.commands.onCommand.addListener(async (command) => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  const tabId = tab.id;
+  const current = tabStates[tabId] || 'off';
+
+  let newState;
   if (command === 'toggle-helper') {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return;
+    // 普通模式: off ↔ normal（从stealth按Ctrl+Shift+E也切到normal）
+    newState = (current === 'normal') ? 'off' : 'normal';
+  } else if (command === 'toggle-stealth') {
+    // 隐形模式: off ↔ stealth
+    newState = (current === 'stealth') ? 'off' : 'stealth';
+  } else {
+    return;
+  }
 
-    const tabId = tab.id;
-    const currentState = tabStates[tabId] || false;
-    const newState = !currentState;
-    tabStates[tabId] = newState;
+  tabStates[tabId] = newState;
+  await chrome.storage.local.set({ mode: newState });
 
-    await chrome.storage.local.set({ enabled: newState });
-
-    try {
-      await chrome.tabs.sendMessage(tabId, {
-        action: 'toggle',
-        enabled: newState
-      });
-    } catch (e) {
-      // 非考试页面没有content script，忽略
-    }
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'setMode',
+      mode: newState
+    });
+  } catch (e) {
+    // 页面无content script，忽略
   }
 });
 
-// popup关闭时保存状态
+// 消息路由
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'getState') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
-      const state = tabStates[tab.id] || false;
-      const config = await chrome.storage.local.get(['matchThreshold', 'activeBanks']);
+      const mode = tabStates[tab.id] || 'off';
+      const config = await chrome.storage.local.get(['matchThreshold', 'activeBanks', 'autoMode']);
       sendResponse({
-        enabled: state,
+        mode,
+        enabled: mode !== 'off',
         threshold: config.matchThreshold || 0.7,
-        activeBanks: config.activeBanks || []
+        activeBanks: config.activeBanks || [],
+        autoMode: config.autoMode || 'normal'
       });
     });
     return true;
   }
 
-  if (msg.action === 'setState') {
+  if (msg.action === 'setMode') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
-      tabStates[tab.id] = msg.enabled;
-      await chrome.storage.local.set({ enabled: msg.enabled });
+      tabStates[tab.id] = msg.mode || 'off';
+      await chrome.storage.local.set({ mode: msg.mode || 'off' });
       try {
         await chrome.tabs.sendMessage(tab.id, {
-          action: 'toggle',
-          enabled: msg.enabled
+          action: 'setMode',
+          mode: msg.mode || 'off'
         });
       } catch (e) { /* ignore */ }
       sendResponse({ success: true });
