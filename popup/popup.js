@@ -1,60 +1,44 @@
 /**
- * popup.js - 插件弹窗逻辑
+ * popup.js - 纯状态展示（无交互控件，防失焦误触）
  */
 
-// 初始化
-document.addEventListener('DOMContentLoaded', async () => {
-  await refreshUI();
-});
+document.addEventListener('DOMContentLoaded', refreshUI);
 
-/** 刷新界面 */
 async function refreshUI() {
   try {
     const config = await chrome.storage.local.get([
       'enabled', 'activeBanks', 'autoMode', 'matchThreshold'
     ]);
 
-    // 开关状态
     const enabled = config.enabled || false;
-    document.getElementById('toggleSwitch').checked = enabled;
-    document.getElementById('statusDot').className = enabled ? 'status-dot active' : 'status-dot';
-    document.getElementById('statusText').textContent = enabled ? '运行中' : '未开启';
+    const dot = document.getElementById('statusDot');
+    dot.className = enabled ? 'status-dot active' : 'status-dot';
 
-    // 模式
-    const mode = config.autoMode || 'normal';
-    document.getElementById('modeSelect').value = mode;
+    document.getElementById('statusTitle').textContent = enabled ? '运行中' : '未开启';
+    document.getElementById('statusSub').textContent = enabled
+      ? '按 Ctrl+Shift+E 关闭'
+      : '按 Ctrl+Shift+E 开启';
 
-    // 题库数量
-    const activeBanks = config.activeBanks || [];
-    document.getElementById('banksCount').textContent = activeBanks.length + '个';
+    document.getElementById('infoMode').textContent =
+      (config.autoMode === 'manual') ? '手动辅助' : '普通（自动勾选）';
+
+    document.getElementById('infoBanks').textContent =
+      (config.activeBanks || []).length + ' 个';
+
+    document.getElementById('infoThreshold').textContent =
+      Math.round((config.matchThreshold || 0.7) * 100) + '%';
   } catch(e) {
-    console.error('Failed to refresh UI:', e);
+    console.error(e);
   }
 }
 
-/** 开关切换 */
-async function toggleHelper() {
-  const checked = document.getElementById('toggleSwitch').checked;
-  await chrome.storage.local.set({ enabled: checked });
-
-  // 通知background
-  chrome.runtime.sendMessage({ action: 'setState', enabled: checked });
-
-  refreshUI();
-}
-
-/** 模式切换 */
-async function changeMode() {
-  const mode = document.getElementById('modeSelect').value;
-  await chrome.storage.local.set({ autoMode: mode });
-}
-
-/** 打开题库管理 */
+/** 打开题库管理（通过background转发到当前tab的内容脚本） */
 function openBankManager() {
-  // 通知当前tab打开题库管理
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'showBankManager' });
-    }
-  });
+  chrome.runtime.sendMessage({ action: 'showBankManager' });
+}
+
+/** 打开设置面板（目前为空，可后续扩展） */
+function openSettings() {
+  // 设置已在页面内通过快捷键入口覆盖，此处预留
+  chrome.runtime.sendMessage({ action: 'showBankManager' });
 }

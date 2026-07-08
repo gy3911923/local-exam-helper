@@ -6,113 +6,122 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  width: 260px;
-  padding: 16px;
+  width: 270px;
+  padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   background: #1a1a2e;
   color: #e8e8f0;
   font-size: 13px;
 }
-.header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 14px;
+
+.warning-bar {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
 }
-.header h2 { font-size: 15px; }
+
+.status-section {
+  padding: 14px 16px 12px;
+  display: flex; align-items: center; gap: 10px;
+}
 .status-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #ef4444; display: inline-block; margin-right: 6px;
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: #ef4444;
 }
-.status-dot.active { background: #10b981; }
+.status-dot.active { background: #10b981; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.status-info { flex: 1; }
+.status-title { font-size: 16px; font-weight: 700; }
+.status-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
 
-.toggle-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; background: rgba(255,255,255,.04);
-  border-radius: 10px; margin-bottom: 12px;
-}
-.toggle-label { font-weight: 500; }
-.toggle-switch {
-  position: relative; width: 44px; height: 24px;
-}
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-slider {
-  position: absolute; cursor: pointer; inset: 0;
-  background: #334155; border-radius: 24px; transition: .3s;
-}
-.toggle-slider::before {
-  content: ''; position: absolute;
-  height: 18px; width: 18px; left: 3px; bottom: 3px;
-  background: #fff; border-radius: 50%; transition: .3s;
-}
-input:checked + .toggle-slider { background: #10b981; }
-input:checked + .toggle-slider::before { transform: translateX(20px); }
+.divider { height: 1px; background: #2a2a3e; margin: 0 16px; }
 
-.mode-row {
-  margin-bottom: 12px;
+.info-list { padding: 10px 16px; }
+.info-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0; font-size: 12px;
 }
-.mode-row select {
-  width: 100%; padding: 8px 12px;
-  background: rgba(255,255,255,.04); border: 1px solid #2a2a3e;
-  border-radius: 8px; color: #e8e8f0; font-size: 13px;
-  outline: none; cursor: pointer;
-}
+.info-label { color: #64748b; }
+.info-value { color: #e8e8f0; font-weight: 500; }
 
-.info-row {
-  display: flex; justify-content: space-between;
-  padding: 6px 0; font-size: 12px; color: #64748b;
+.instruction { padding: 10px 16px 14px; }
+.instruction-title { font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; }
+.instruction-item {
+  font-size: 12px; color: #94a3b8; padding: 3px 0 3px 14px;
+  position: relative; line-height: 1.4;
 }
+.instruction-item::before { content: '•'; position: absolute; left: 0; color: #1a73e8; }
 
-.btn {
-  width: 100%; padding: 10px; border-radius: 8px;
-  border: 1px solid #2a2a3e; background: transparent;
-  color: #e8e8f0; font-size: 13px; cursor: pointer;
-  margin-top: 8px; text-align: center; display: block;
-  text-decoration: none;
+.btn-row { padding: 8px 16px 14px; }
+.safe-btn {
+  display: block; width: 100%; padding: 10px; border-radius: 8px;
+  border: 1px solid #2a2a3e; background: rgba(255,255,255,.04);
+  color: var(--color, #e8e8f0); font-size: 13px; cursor: pointer;
+  text-align: center; margin-bottom: 6px;
 }
-.btn:active { background: rgba(255,255,255,.05); }
-.btn.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
-.btn.primary:active { opacity: .8; }
+.safe-btn:active { background: rgba(255,255,255,.08); }
+.safe-btn .hint-text { font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
 
-.hint {
-  font-size: 11px; color: #64748b; text-align: center;
-  margin-top: 10px; line-height: 1.4;
-}
+.footer { padding: 8px 16px; text-align: center; font-size: 10px; color: #475569; border-top: 1px solid #1f1f35; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h2>📚 答题助手</h2>
-  <span><span class="status-dot" id="statusDot"></span><span id="statusText">未开启</span></span>
+<div class="warning-bar">
+  ⚠️ 考试中请勿点开此面板！<br>弹出即触发页面失焦，可能被检测
 </div>
 
-<div class="toggle-row">
-  <span class="toggle-label">启用状态</span>
-  <label class="toggle-switch">
-    <input type="checkbox" id="toggleSwitch" onchange="toggleHelper()">
-    <span class="toggle-slider"></span>
-  </label>
+<div class="status-section">
+  <div class="status-dot" id="statusDot"></div>
+  <div class="status-info">
+    <div class="status-title" id="statusTitle">未开启</div>
+    <div class="status-sub" id="statusSub">按 Ctrl+Shift+E 开关</div>
+  </div>
 </div>
 
-<div class="mode-row">
-  <span style="font-size:12px;color:#64748b">答题模式</span>
-  <select id="modeSelect" onchange="changeMode()">
-    <option value="normal">普通模式（自动勾选）</option>
-    <option value="manual">手动辅助（仅显示答案）</option>
-  </select>
+<div class="divider"></div>
+
+<div class="info-list">
+  <div class="info-item">
+    <span class="info-label">答题模式</span>
+    <span class="info-value" id="infoMode">普通</span>
+  </div>
+  <div class="info-item">
+    <span class="info-label">激活题库</span>
+    <span class="info-value" id="infoBanks">0 个</span>
+  </div>
+  <div class="info-item">
+    <span class="info-label">匹配阈值</span>
+    <span class="info-value" id="infoThreshold">70%</span>
+  </div>
 </div>
 
-<div class="info-row">
-  <span>快捷键</span>
-  <span>Ctrl+Shift+E</span>
-</div>
-<div class="info-row">
-  <span>激活题库</span>
-  <span id="banksCount">—</span>
+<div class="divider"></div>
+
+<div class="instruction">
+  <div class="instruction-title">安全操作指南</div>
+  <div class="instruction-item"><b>考前</b>：在任意页面点开此面板 → 管理题库</div>
+  <div class="instruction-item"><b>考试中</b>：只按 <b>Ctrl+Shift+E</b> 开关，不碰插件图标</div>
+  <div class="instruction-item"><b>悬浮窗</b>：页面内显示，不触发切屏检测</div>
+  <div class="instruction-item"><b>关闭后</b>：页面完全恢复，无任何痕迹</div>
 </div>
 
-<button class="btn primary" id="btnBank" onclick="openBankManager()">📚 题库管理</button>
+<div class="btn-row">
+  <button class="safe-btn" onclick="openBankManager()" style="--color:#1a73e8;border-color:#1a73e8">
+    📚 打开题库管理
+    <span class="hint-text">考试前操作，考前配置完毕即可</span>
+  </button>
+  <button class="safe-btn" onclick="openSettings()">
+    ⚙️ 打开设置面板
+    <span class="hint-text">调整匹配阈值、OCR密钥（如有）</span>
+  </button>
+</div>
 
-<p class="hint">按 Ctrl+Shift+E 快速开关<br>所有操作纯本地，无外网请求</p>
+<div class="footer">纯本地 · 无外网 · 零切屏</div>
 
 <script src="popup.js"></script>
 </body>
