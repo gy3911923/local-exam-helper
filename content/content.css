@@ -1,0 +1,185 @@
+/* content.css - 悬浮窗 + 题库管理面板样式 */
+
+/* ===== 悬浮窗 ===== */
+#__leh_panel__ {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 320px;
+  height: 160px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  z-index: 2147483646;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #e8e8f0;
+  font-size: 13px;
+  user-select: none;
+  transition: opacity .2s;
+}
+
+.__leh_header__ {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.04);
+  cursor: move;
+  border-bottom: 1px solid #2a2a3e;
+}
+.__leh_title__ { font-weight: 600; font-size: 13px; }
+.__leh_status__ {
+  font-size: 11px; color: #64748b;
+  background: rgba(100,116,139,.15);
+  padding: 2px 8px; border-radius: 10px;
+}
+.__leh_status_active__ {
+  color: #10b981 !important;
+  background: rgba(16,185,129,.15) !important;
+}
+
+.__leh_body__ {
+  padding: 8px 12px;
+  overflow-y: auto;
+  height: calc(100% - 35px);
+  pointer-events: none;
+}
+
+.__leh_placeholder__ {
+  text-align: center; padding: 20px 0; color: #64748b;
+}
+.__leh_placeholder__ p { margin: 4px 0 0; }
+.__leh_placeholder__ small { font-size: 11px; opacity: .7; word-break: break-all; }
+
+.__leh_warn__ {
+  color: #f59e0b; font-size: 12px; font-weight: 600;
+  padding: 4px 8px; background: rgba(245,158,11,.1);
+  border-radius: 6px; margin-bottom: 8px;
+}
+.__leh_ok__ {
+  color: #10b981; font-size: 12px;
+  padding: 4px 8px; background: rgba(16,185,129,.1);
+  border-radius: 6px; margin-bottom: 8px;
+}
+.__leh_result__ {
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.__leh_result__:last-child { border-bottom: none; }
+.__leh_stem__ {
+  font-size: 11px; color: #8890a0; line-height: 1.4; margin-bottom: 4px;
+}
+.__leh_answer_row__ {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.__leh_answer__ { font-size: 14px; font-weight: 700; }
+.__leh_score__ {
+  font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 8px;
+}
+.__leh_options__ { font-size: 11px; color: #64748b; margin-top: 2px; }
+.__leh_opt_answer__ {
+  color: #10b981; font-weight: 600;
+}
+.__leh_opt__ { color: #64748b; }
+.__leh_analysis__ {
+  font-size: 11px; color: #94a3b8; margin-top: 2px;
+  border-left: 2px solid #334155; padding-left: 6px;
+}
+
+.__leh_resize__ {
+  position: absolute; bottom: 2px; right: 2px;
+  width: 16px; height: 16px;
+  cursor: nwse-resize;
+  pointer-events: auto;
+  background: linear-gradient(135deg, transparent 50%, #334155 50%);
+  border-radius: 0 0 8px 0;
+}
+
+/* ===== 题库管理面板 ===== */
+#__leh_bank_mgr__ {
+  display: none;
+  position: fixed; inset: 0; z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #e8e8f0;
+}
+.__leh_bm_overlay__ {
+  position: absolute; inset: 0; background: rgba(0,0,0,.6);
+}
+.__leh_bm_dialog__ {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 480px; max-width: 90vw; max-height: 80vh;
+  background: #1a1a2e; border: 1px solid #2a2a3e;
+  border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.6);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.__leh_bm_header__ {
+  display: flex; align-items: center; padding: 14px 16px;
+  border-bottom: 1px solid #2a2a3e; gap: 12px;
+}
+.__leh_bm_header__ h3 { font-size: 15px; margin: 0; flex: 1; }
+.__leh_bm_stats__ { font-size: 11px; color: #64748b; }
+.__leh_bm_close__ {
+  border: none; background: none; color: #fff; font-size: 18px;
+  cursor: pointer; padding: 4px; line-height: 1;
+}
+
+.__leh_bm_toolbar__ {
+  display: flex; gap: 8px; padding: 12px 16px;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.__leh_btn_primary__ {
+  padding: 8px 16px; border-radius: 8px; border: none;
+  background: #1a73e8; color: #fff; font-size: 13px;
+  cursor: pointer; font-weight: 500;
+}
+.__leh_btn_primary__:active { opacity: .8; }
+
+.__leh_btn_secondary__ {
+  padding: 8px 16px; border-radius: 8px; border: 1px solid #2a2a3e;
+  background: transparent; color: #e8e8f0; font-size: 13px;
+  cursor: pointer;
+}
+.__leh_btn_secondary__:active { background: rgba(255,255,255,.05); }
+
+.__leh_bm_list__ {
+  flex: 1; overflow-y: auto; padding: 8px 16px;
+}
+.__leh_bm_empty__ {
+  text-align: center; padding: 40px 0; color: #64748b; font-size: 13px;
+}
+
+.__leh_bm_item__ {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+  cursor: default;
+}
+.__leh_bm_item__:last-child { border-bottom: none; }
+
+.__leh_bm_check__ { flex-shrink: 0; }
+.__leh_bm_check__ input { cursor: pointer; }
+
+.__leh_bm_info__ { flex: 1; min-width: 0; }
+.__leh_bm_name__ {
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.__leh_bm_meta__ { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+.__leh_bm_priority__ {
+  font-size: 11px; color: #1a73e8; font-weight: 600;
+  background: rgba(26,115,232,.1); padding: 2px 8px; border-radius: 10px;
+}
+.__leh_bm_delete__ {
+  border: none; background: none; cursor: pointer; font-size: 16px;
+  padding: 2px; opacity: .5;
+}
+.__leh_bm_delete__:hover { opacity: 1; }
+
+.__leh_bm_footer__ {
+  padding: 10px 16px; border-top: 1px solid #2a2a3e;
+  text-align: right;
+}

@@ -98,12 +98,30 @@ local-exam-helper/
 | content/questionFinder.js | ⏳ 待开发 | 最核心模块 |
 | content/matcher.js | ⏳ 待开发 | |
 | content/floatPanel.js | ⏳ 待开发 | |
-| content/bankManager.js | ⏳ 待开发 | |
-| libs/xlsx.mini.js | ⏳ 待获取 | 需从SheetJS下载 |
-| utils/db.js | ⏳ 待开发 | |
-| utils/textNormalize.js | ⏳ 待开发 | |
-| utils/common.js | ⏳ 待开发 | |
-| assets/icon.png | ⏳ 待生成 | |
+| 文件 | 状态 | 行数 | 说明 |
+|------|:---:|------|------|
+| manifest.json | ✅ 完成 | 57 | Manifest V3, Ctrl+Shift+E快捷键 |
+| background.js | ✅ 完成 | 198 | Service Worker：快捷键+状态管理+消息中转+IndexedDB操作 |
+| utils/common.js | ✅ 完成 | 59 | 工具函数：uid、防抖、sleep、安全DOM查询 |
+| utils/textNormalize.js | ✅ 完成 | 117 | 文本归一化+编辑距离相似度算法 |
+| utils/db.js | ✅ 完成 | 110 | IndexedDB封装（供参考，实际通过background操作） |
+| content/questionFinder.js | ✅ 完成 | 254 | 题目识别引擎：表单回溯+同name分组+正则降级 |
+| content/matcher.js | ✅ 完成 | 123 | 多题库匹配引擎：编辑距离+优先级加权+冲突检测 |
+| content/floatPanel.js | ✅ 完成 | 227 | 悬浮窗组件：拖拽+缩放+位置记忆+结果展示 |
+| content/bankManager.js | ✅ 完成 | 301 | 题库管理面板：导入/导出/去重/激活管理 |
+| content/content.js | ✅ 完成 | 211 | 主控入口：开关控制+模块协调+自动答题调度 |
+| content/content.css | ✅ 完成 | 185 | 悬浮窗+管理面板样式（暗色主题） |
+| libs/xlsx.mini.js | ✅ 完成 | — | SheetJS社区版(280KB)，Excel解析 |
+| popup/popup.html | ✅ 完成 | 119 | 插件弹窗界面 |
+| popup/popup.js | ✅ 完成 | 60 | 弹窗逻辑：开关切换+模式选择+题库入口 |
+| assets/icon.png | ✅ 完成 | — | 128x128插件图标 |
+| DESIGN.md | ✅ 完成 | 353 | 技术设计文档 |
+| README.md | ✅ 完成 | 74 | 使用说明 |
+| IMPROVEMENTS.md | ✅ 完成 | 29 | 改进清单与局限 |
+| MEMORY.md | ✅ 完成 | — | 本文件 |
+| question_template.json | ✅ 完成 | 38 | 题库模板 |
+
+**总计：约1700行代码 + 设计文档，框架已完整搭建。**
 
 ## 七、待确认/未解决问题
 

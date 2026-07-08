@@ -91,9 +91,108 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (msg.action === 'getAllBanks') {
+    _getAllBanksFromDB().then(banks => sendResponse(banks));
+    return true;
+  }
+
+  if (msg.action === 'getActiveBankData') {
+    const bankIds = msg.bankIds || [];
+    const priorities = msg.priorities || {};
+    _getAllBanksFromDB().then(allBanks => {
+      const active = allBanks
+        .filter(b => bankIds.includes(b.id))
+        .map(b => ({ ...b, priority: priorities[b.id] || 0 }));
+      sendResponse(active);
+    });
+    return true;
+  }
+
+  if (msg.action === 'showBankManager') {
+    chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { action: 'showBankManager' });
+      } catch(e) { /* ignore */ }
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (msg.action === 'saveBank') {
+    _saveBankToDB(msg.bank).then(result => sendResponse(result));
+    return true;
+  }
+
+  if (msg.action === 'deleteBank') {
+    _deleteBankFromDB(msg.bankId).then(() => sendResponse({ success: true }));
+    return true;
+  }
 });
 
 // tab关闭时清理状态
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabStates[tabId];
 });
+
+/** 保存题库到IndexedDB */
+function _saveBankToDB(bank) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('ExamBanks', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('banks')) {
+        db.createObjectStore('banks', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('banks', 'readwrite');
+      const store = tx.objectStore('banks');
+      store.put({ ...bank, updatedAt: new Date().toISOString() });
+      tx.oncomplete = () => { db.close(); resolve(bank); };
+      tx.onerror = () => { db.close(); resolve(null); };
+    };
+    req.onerror = () => resolve(null);
+  });
+}
+
+/** 从IndexedDB删除题库 */
+function _deleteBankFromDB(bankId) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('ExamBanks', 1);
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('banks', 'readwrite');
+      const store = tx.objectStore('banks');
+      store.delete(bankId);
+      tx.oncomplete = () => { db.close(); resolve(); };
+    };
+    req.onerror = () => resolve();
+  });
+}
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('ExamBanks', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('banks')) {
+        db.createObjectStore('banks', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('banks', 'readonly');
+      const store = tx.objectStore('banks');
+      const getAll = store.getAll();
+      getAll.onsuccess = () => {
+        resolve(getAll.result || []);
+        db.close();
+      };
+      getAll.onerror = () => {
+        resolve([]);
+        db.close();
+      };
+    };
+    req.onerror = () => resolve([]);
+  });
+}

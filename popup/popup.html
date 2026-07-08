@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 260px;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #1a1a2e;
+  color: #e8e8f0;
+  font-size: 13px;
+}
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.header h2 { font-size: 15px; }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ef4444; display: inline-block; margin-right: 6px;
+}
+.status-dot.active { background: #10b981; }
+
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: rgba(255,255,255,.04);
+  border-radius: 10px; margin-bottom: 12px;
+}
+.toggle-label { font-weight: 500; }
+.toggle-switch {
+  position: relative; width: 44px; height: 24px;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #334155; border-radius: 24px; transition: .3s;
+}
+.toggle-slider::before {
+  content: ''; position: absolute;
+  height: 18px; width: 18px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: .3s;
+}
+input:checked + .toggle-slider { background: #10b981; }
+input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+.mode-row {
+  margin-bottom: 12px;
+}
+.mode-row select {
+  width: 100%; padding: 8px 12px;
+  background: rgba(255,255,255,.04); border: 1px solid #2a2a3e;
+  border-radius: 8px; color: #e8e8f0; font-size: 13px;
+  outline: none; cursor: pointer;
+}
+
+.info-row {
+  display: flex; justify-content: space-between;
+  padding: 6px 0; font-size: 12px; color: #64748b;
+}
+
+.btn {
+  width: 100%; padding: 10px; border-radius: 8px;
+  border: 1px solid #2a2a3e; background: transparent;
+  color: #e8e8f0; font-size: 13px; cursor: pointer;
+  margin-top: 8px; text-align: center; display: block;
+  text-decoration: none;
+}
+.btn:active { background: rgba(255,255,255,.05); }
+.btn.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.btn.primary:active { opacity: .8; }
+
+.hint {
+  font-size: 11px; color: #64748b; text-align: center;
+  margin-top: 10px; line-height: 1.4;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>📚 答题助手</h2>
+  <span><span class="status-dot" id="statusDot"></span><span id="statusText">未开启</span></span>
+</div>
+
+<div class="toggle-row">
+  <span class="toggle-label">启用状态</span>
+  <label class="toggle-switch">
+    <input type="checkbox" id="toggleSwitch" onchange="toggleHelper()">
+    <span class="toggle-slider"></span>
+  </label>
+</div>
+
+<div class="mode-row">
+  <span style="font-size:12px;color:#64748b">答题模式</span>
+  <select id="modeSelect" onchange="changeMode()">
+    <option value="normal">普通模式（自动勾选）</option>
+    <option value="manual">手动辅助（仅显示答案）</option>
+  </select>
+</div>
+
+<div class="info-row">
+  <span>快捷键</span>
+  <span>Ctrl+Shift+E</span>
+</div>
+<div class="info-row">
+  <span>激活题库</span>
+  <span id="banksCount">—</span>
+</div>
+
+<button class="btn primary" id="btnBank" onclick="openBankManager()">📚 题库管理</button>
+
+<p class="hint">按 Ctrl+Shift+E 快速开关<br>所有操作纯本地，无外网请求</p>
+
+<script src="popup.js"></script>
+</body>
+</html>
