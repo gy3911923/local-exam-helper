@@ -120,8 +120,20 @@ const ExamHelper = {
     this._matchResults = Matcher.matchAll(this._questions, this._banks, threshold);
 
     if (this._mode === 'normal') {
-      // 普通模式：自动勾选
       await this._autoAnswer();
+      // 更新悬浮窗状态，显示纠错统计
+      if (this._lastStats) {
+        const { corrected, filled } = this._lastStats;
+        const status = document.getElementById('__leh_status__');
+        if (status) {
+          let extra = [];
+          if (corrected > 0) extra.push(`纠正${corrected}题`);
+          if (filled > 0) extra.push(`作答${filled}题`);
+          if (extra.length > 0) {
+            status.textContent = `🟢 运行中 · ` + extra.join(' · ');
+          }
+        }
+      }
     }
 
     // 显示第一条结果
@@ -133,24 +145,136 @@ const ExamHelper = {
     this._bindHoverEvents();
   },
 
-  /** 自动勾选高置信度题目 */
+  /** 自动作答（含已选纠错） */
   async _autoAnswer() {
-    for (const mr of this._matchResults) {
-      if (mr.canAutoAnswer && mr.question.inputElements.length > 0) {
-        const input = mr.question.inputElements.find(
-          el => el.closest('label')?.textContent?.includes(mr.bestAnswer)
-        ) || mr.question.inputElements[0];
+    let corrected = 0;
+    let filled = 0;
 
-        // 模拟点击
-        const delay = Helpers.randomDelay(50, 200);
-        await Helpers.sleep(delay);
-        try {
-          input.click();
-          // 触发change事件（部分框架需要）
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch(e) { /* 忽略点击失败 */ }
+    for (const mr of this._matchResults) {
+      const q = mr.question;
+      if (!q.inputElements || q.inputElements.length === 0) continue;
+
+      // 检测当前已选状态
+      const alreadySelected = this._getSelectedInput(q);
+
+      if (mr.canAutoAnswer) {
+        // 有高置信度匹配
+        const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
+
+        if (alreadySelected) {
+          // 已选 → 检查是否正确
+          if (this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+            continue; // 正确，跳过
+          }
+          // 选错了 → 纠正
+          await Helpers.sleep(Helpers.randomDelay(80, 200));
+          try {
+            alreadySelected.click(); // 先取消原选择
+            alreadySelected.dispatchEvent(new Event('change', { bubbles: true }));
+            await Helpers.sleep(Helpers.randomDelay(50, 150));
+            if (correctInput) {
+              correctInput.click();
+              correctInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            corrected++;
+          } catch(e) { /* ignore */ }
+        } else {
+          // 未选 → 自动勾选
+          if (correctInput) {
+            await Helpers.sleep(Helpers.randomDelay(50, 200));
+            try {
+              correctInput.click();
+              correctInput.dispatchEvent(new Event('change', { bubbles: true }));
+              filled++;
+            } catch(e) { /* ignore */ }
+          }
+        }
+      } else {
+        // 低置信度/冲突 → 不操作
+        continue;
       }
     }
+
+    // 记录本次答题统计
+    this._lastStats = { corrected, filled };
+  },
+
+  /** 获取题目当前已选中的input */
+  _getSelectedInput(q) {
+    return q.inputElements.find(el => el.checked) || null;
+  },
+
+  /** 根据答案文本找到对应input */
+  _findInputByAnswer(q, answer) {
+    if (!answer) return q.inputElements[0];
+
+    // 多选答案（如 "ABD"）
+    if (/^[A-H]+$/i.test(answer) && answer.length > 1) {
+      // 多选场景返回第一个匹配的input，后续处理需遍历
+      const labels = answer.toUpperCase().split('');
+      for (const input of q.inputElements) {
+        const labelText = this._getInputLabel(input);
+        for (const l of labels) {
+          if (labelText.startsWith(l + '.') || labelText.startsWith(l + '、') || labelText.startsWith(l + ')')) {
+            return input;
+          }
+        }
+      }
+    }
+
+    // 单选：按选项文本匹配
+    const options = q.options || {};
+    const targetLabel = Object.entries(options).find(([k]) => k === answer.toUpperCase());
+    if (targetLabel) {
+      const targetText = TextNormalizer.normalize(targetLabel[1]);
+      for (const input of q.inputElements) {
+        const labelText = TextNormalizer.normalize(this._getInputLabel(input));
+        if (labelText.includes(targetText) || targetText.includes(labelText)) {
+          return input;
+        }
+      }
+    }
+
+    return q.inputElements[0];
+  },
+
+  /** 获取input关联的label文本 */
+  _getInputLabel(input) {
+    // 方式1：label[for]
+    if (input.id) {
+      const label = Helpers.safeQuery(`label[for="${input.id}"]`);
+      if (label) return (label.textContent || '').trim();
+    }
+    // 方式2：父元素文本
+    const parent = input.parentElement;
+    if (parent) {
+      const clone = parent.cloneNode(true);
+      const inp = clone.querySelector('input');
+      if (inp) inp.remove();
+      return (clone.textContent || '').trim();
+    }
+    return '';
+  },
+
+  /** 判断已选答案是否与正确答案一致 */
+  _isSameAnswer(selectedInput, correctAnswer, q) {
+    const type = q.type || 'single';
+    if (type === 'judge' || (q.inputElements.length <= 2 && type === 'single')) {
+      const label = this._getInputLabel(selectedInput);
+      const isCorrect = /^(对|正确|√|✓|是|yes|true)$/i.test(correctAnswer);
+      const isSelectedCorrect = /^(对|正确|√|✓|是|yes|true)$/i.test(label);
+      return isCorrect === isSelectedCorrect;
+    }
+
+    // 单选/多选：比较选项字母
+    const selectedValue = selectedInput.value;
+    const correctLetter = correctAnswer?.toUpperCase();
+
+    // 检查input是否对应正确答案的字母
+    const label = this._getInputLabel(selectedInput);
+    return label.toUpperCase().startsWith(correctLetter + '.') ||
+           label.toUpperCase().startsWith(correctLetter + '、') ||
+           label.toUpperCase().startsWith(correctLetter + ')');
   },
 
   /** 绑定题目hover事件 */
