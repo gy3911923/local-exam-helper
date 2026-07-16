@@ -255,12 +255,33 @@ const QuestionFinder = {
     });
   },
 
-  /** 判断题目类型 */
+  /** 判断题目类型（用选项标签文本判定判断题，不靠选项数量） */
   detectType(inputElements) {
     if (!inputElements || inputElements.length === 0) return this.TYPE.SINGLE;
     const first = inputElements[0];
     if (first.type === 'checkbox') return this.TYPE.MULTIPLE;
-    if (first.type === 'radio') return inputElements.length <= 2 ? this.TYPE.JUDGE : this.TYPE.SINGLE;
+    if (first.type === 'radio') {
+      // 提取所有选项文本
+      const labelTexts = inputElements.map(inp => {
+        const elRadio = inp.closest('.el-radio');
+        if (elRadio) {
+          const lbl = elRadio.querySelector('.el-radio__label');
+          if (lbl) return (lbl.textContent || '').trim();
+        }
+        const parent = inp.parentElement;
+        if (parent) {
+          const clone = parent.cloneNode(true);
+          const ic = clone.querySelector('input');
+          if (ic) ic.remove();
+          return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        }
+        return '';
+      });
+      // 含"正确/错误/对/错/是/否"且选项≤3 → 判断题
+      const hasJudgeWords = labelTexts.some(t => /^(正确|错误|对|错|是|否|√|×|✓|✗|true|false|yes|no)$/i.test(t));
+      if (hasJudgeWords && inputElements.length <= 3) return this.TYPE.JUDGE;
+      return this.TYPE.SINGLE;
+    }
     return this.TYPE.SINGLE;
   },
 

@@ -29,7 +29,21 @@ const Matcher = {
       for (const bankQ of bank.questions) {
         // 使用预归一化文本或现场归一化
         const normalizedBankQ = bankQ.normalizedQ || TextNormalizer.normalize(bankQ.question || '');
-        const score = TextNormalizer.similarity(question.normalizedStem || '', normalizedBankQ);
+        let score = TextNormalizer.similarity(question.normalizedStem || '', normalizedBankQ);
+
+        // 选项重叠率加权：题干相同但选项不同时降低得分
+        if (question.options && bankQ.options && Object.keys(question.options).length > 0) {
+          const qOpts = Object.values(question.options).map(v => TextNormalizer.normalize(v));
+          const bOpts = Object.values(bankQ.options).map(v => TextNormalizer.normalize(v));
+          let overlap = 0;
+          for (const qo of qOpts) {
+            if (bOpts.some(bo => bo.includes(qo) || qo.includes(bo))) overlap++;
+          }
+          if (qOpts.length > 0 && bOpts.length > 0) {
+            const overlapRate = overlap / Math.max(qOpts.length, bOpts.length);
+            score = score * 0.6 + overlapRate * 0.4;  // 题干60% + 选项40%
+          }
+        }
 
         if (score >= thr * 0.5) {  // 宽松收集，后续筛选
           allResults.push({

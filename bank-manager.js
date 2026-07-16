@@ -174,7 +174,7 @@ async function parseExcel(file) {
   if (isTitleRow(rawArr[0]) && rawArr.length > 2) { headerRow = rawArr[1]; dataStart = 2; }
 
   const cols = headerRow.map(String);
-  const isCompact = cols.join(',').includes('题目名称') && cols.join(',').includes('选项') && !cols.join(',').includes('选项A');
+  const isCompact = findCol(cols, 'name') >= 0 && findCol(cols, 'option') >= 0 && !cols.join(',').includes('选项A');
 
   if (isCompact) {
     return parseCompact(rawArr.slice(dataStart), cols);
@@ -205,11 +205,24 @@ function isTitleRow(row) {
   return false;
 }
 
+// ===== 列名别名表 =====
+const COL_ALIASES = {
+  name: ['题目名称','题干','题目','试题','问题','question'],       // 题干列
+  type: ['题目类型','题型','类型','试题类型','type','题目类别'],        // 题型列
+  answer: ['答案','正确答案','参考答案','标准答案','answer'],           // 答案列
+  option: ['选项','options']                                          // 选项列
+};
+
+function findCol(cols, key) {
+  const aliases = COL_ALIASES[key] || [];
+  return cols.findIndex(c => aliases.some(a => c.includes(a)));
+}
+
 function parseCompact(rows, cols) {
-  const iName = cols.findIndex(c => c.includes('题目名称') || c.includes('题干'));
-  const iType = cols.findIndex(c => c.includes('题目类型') || c.includes('题型'));
-  const iAns = cols.findIndex(c => c.includes('答案'));
-  const iOpt = cols.findIndex(c => c === '选项' || c.startsWith('选项'));
+  const iName = findCol(cols, 'name');
+  const iType = findCol(cols, 'type');
+  const iAns = findCol(cols, 'answer');
+  const iOpt = findCol(cols, 'option');
 
   return rows.map(row => {
     const typeStr = String(row[iType] || '');

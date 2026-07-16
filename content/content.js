@@ -97,8 +97,6 @@ const ExamHelper = {
       const alreadySelected = this._getSelectedInput(q);
 
       if (mr.canAutoAnswer) {
-        const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
-
         if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
           this._answeredQuestions.add(key);
           continue;
@@ -108,14 +106,12 @@ const ExamHelper = {
         await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
 
         try {
-          if (alreadySelected && correctInput) {
+          if (alreadySelected) {
+            // 先取消原错误选择
             this._fireClick(alreadySelected);
             await Helpers.sleep(Helpers.randomDelay(50, 150));
-            this._fireClick(correctInput);
-            corrected++;
-          } else if (correctInput) {
-            this._fireClick(correctInput);
-            filled++;
+          }
+          this._selectAnswers(q, mr.bestAnswer);
           }
           this._answeredQuestions.add(key);
         } catch(e) { /* ignore */ }
@@ -226,41 +222,55 @@ const ExamHelper = {
     }) || null;
   },
 
-  /** 根据答案文本找到对应input */
-  _findInputByAnswer(q, answer) {
-    if (!answer) return q.inputElements[0];
+  /** 根据答案文本选中所有对应选项（单选点一个，多选点全部） */
+  async _selectAnswers(q, answer) {
+    if (!answer || !q.inputElements) return 0;
 
-    // 多选答案（如 "ABD"）
-    if (/^[A-H]+$/i.test(answer) && answer.length > 1) {
-      // 多选场景返回第一个匹配的input，后续处理需遍历
-      const labels = answer.toUpperCase().split('');
-      for (const input of q.inputElements) {
-        const labelText = this._getInputLabel(input);
-        for (const l of labels) {
-          if (labelText.startsWith(l + '.') || labelText.startsWith(l + '、') || labelText.startsWith(l + ')')) {
-            return input;
-          }
+    const answerLetters = answer.toUpperCase().split('').filter(ch => /[A-H]/.test(ch));
+
+    // 单选答案 → 只点第一个匹配
+    if (answerLetters.length === 1) {
+      const input = this._findInputByAnswer(q, answer);
+      if (input) { this._fireClick(input); return 1; }
+      return 0;
+    }
+
+    // 多选答案（如 "ABD"）→ 逐个点击所有字母对应的选项
+    let clicked = 0;
+    for (const input of q.inputElements) {
+      const labelText = this._getInputLabel(input);
+      for (const letter of answerLetters) {
+        if (labelText.startsWith(letter + '.') || labelText.startsWith(letter + '、') || labelText.startsWith(letter + ')') || labelText.startsWith(letter + ' ')) {
+          this._fireClick(input);
+          clicked++;
+          break;
         }
       }
     }
+    return clicked;
+  },
 
-    // 单选：按选项文本匹配
+  /** 根据单个答案字母找到对应input（仅用于单选/判断检查） */
+  _findInputByAnswer(q, answer) {
+    if (!answer || !q.inputElements) return q.inputElements[0];
+    const letter = answer.toUpperCase()[0];
+    for (const input of q.inputElements) {
+      const labelText = this._getInputLabel(input);
+      if (labelText.startsWith(letter + '.') || labelText.startsWith(letter + '、') || labelText.startsWith(letter + ')') || labelText.startsWith(letter + ' ')) {
+        return input;
+      }
+    }
+    // 回退：按选项文本匹配
     const options = q.options || {};
-    const targetLabel = Object.entries(options).find(([k]) => k === answer.toUpperCase());
+    const targetLabel = Object.entries(options).find(([k]) => k.toUpperCase() === answer.toUpperCase());
     if (targetLabel) {
       const targetText = TextNormalizer.normalize(targetLabel[1]);
       for (const input of q.inputElements) {
-        const labelText = TextNormalizer.normalize(this._getInputLabel(input));
-        if (labelText.includes(targetText) || targetText.includes(labelText)) {
-          return input;
-        }
+        if (TextNormalizer.normalize(this._getInputLabel(input)).includes(targetText)) return input;
       }
     }
-
     return q.inputElements[0];
   },
-
-  /** 获取input关联的label文本 */
   _getInputLabel(input) {
     // 方式1：label[for]
     if (input.id) {
@@ -299,51 +309,53 @@ const ExamHelper = {
            label.toUpperCase().startsWith(correctLetter + ')');
   },
 
-  /** 绑定题目hover事件：鼠标移到哪题就答哪题 */
+  /** 绑定题目hover事件：鼠标移到哪题就答哪题（300ms延迟防误触） */
   _bindHoverEvents() {
     for (const mr of this._matchResults) {
       if (!mr.question.container) continue;
       const container = mr.question.container;
+      let hoverTimer = null;
 
-      container.addEventListener('mouseenter', async () => {
+      container.addEventListener('mouseenter', () => {
         if (this._mode !== 'normal') return;
-
-        // 显示匹配结果
+        // 显示匹配结果立即
         FloatPanel.showResult(mr.question, mr);
 
-        // 悬停触发逐题作答（已答过/低置信度/冲突 → 跳过）
+        // 延迟300ms再作答，快速滚屏不清除
         const q = mr.question;
         if (!q.inputElements || q.inputElements.length === 0) return;
 
-        const key = q.normalizedStem || q.stemText;
-        if (this._answeredQuestions.has(key)) return;
+        hoverTimer = setTimeout(async () => {
+          const key = q.normalizedStem || q.stemText;
+          if (this._answeredQuestions.has(key)) return;
 
-        if (mr.canAutoAnswer) {
-          const alreadySelected = this._getSelectedInput(q);
-          if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
-            this._answeredQuestions.add(key);
-            return; // 已正确，跳过
-          }
-
-          const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
-          if (!correctInput) return;
-
-          try {
-            if (alreadySelected) {
-              await Helpers.sleep(Helpers.randomDelay(80, 200));
-              this._fireClick(alreadySelected);
-              await Helpers.sleep(Helpers.randomDelay(50, 150));
-            } else {
-              await Helpers.sleep(Helpers.randomDelay(100, 300));
+          if (mr.canAutoAnswer) {
+            const alreadySelected = this._getSelectedInput(q);
+            if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+              this._answeredQuestions.add(key);
+              return;
             }
-            this._fireClick(correctInput);
-            this._answeredQuestions.add(key);
-            if (alreadySelected) this._totalCorrected++;
-            else this._totalFilled++;
-            // 更新浮窗状态
-            FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._totalCorrected);
-          } catch(e) { /* ignore */ }
-        }
+
+            try {
+              if (alreadySelected) {
+                await Helpers.sleep(Helpers.randomDelay(80, 200));
+                this._fireClick(alreadySelected);
+                await Helpers.sleep(Helpers.randomDelay(50, 150));
+              } else {
+                await Helpers.sleep(Helpers.randomDelay(100, 300));
+              }
+              this._selectAnswers(q, mr.bestAnswer);
+              this._answeredQuestions.add(key);
+              if (alreadySelected) this._totalCorrected++;
+              else this._totalFilled++;
+              FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._totalCorrected);
+            } catch(e) { /* ignore */ }
+          }
+        }, 300);
+      });
+
+      container.addEventListener('mouseleave', () => {
+        if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
       });
     }
   },
