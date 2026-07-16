@@ -4,7 +4,7 @@
 > 本地 WorkBuddy 启动后，读取此文件即可恢复完整开发上下文。
 > 
 > 创建日期：2026-07-08
-> 最后更新：2026-07-08
+> 最后更新：2026-07-15
 
 ---
 
@@ -187,6 +187,12 @@ local-exam-helper/
 
 | 时间 | 变更 | 原因 |
 |------|------|------|
+| 2026-07-15 | questionFinder 添加 Element UI 支持 | 实测考试系统为国网安全考试系统 `aqgk.js.sgcc.com.cn`，使用 Vue 2 + Element UI。el-radio 渲染 input 但选项文本在 .el-radio__label 兄弟节点，原父元素回退逻辑取不到文本 |
+| 2026-07-15 | _fireClick 添加 input 事件派发 | Element UI 的 Vue 组件需要同时触发 click + change + input 才能正确更新 v-model |
+| 2026-07-15 | _getSelectedInput 添加 .is-checked 回退 | Element UI 可能用 CSS 类 .is-checked 标记选中状态，而非原生 checked 属性 |
+| 2026-07-15 | 快捷键自动绑定检查 | suggested_key 只是建议值，Chrome 不自动绑定。onInstalled 时检测未绑定快捷键并提示用户 |
+| 2026-07-15 | popup 内联 onclick → addEventListener | Manifest V3 CSP 禁止内联脚本，原按钮完全无效 |
+| 2026-07-15 | background.js 修复 _getAllBanksFromDB 函数声明丢失 | 函数体存在但声明丢失，导致 ReferenceError |
 | 2026-07-08 | 新增中途启动纠错功能 | 用户提出：考试先做一半再开插件，应自动检测并纠正错误答案 |
 | 2026-07-08 | _autoAnswer重构为智能作答 | 从简单勾选升级为检测已选→跳过/纠正/填空三态逻辑 |
 | 2026-07-08 | popup改为纯状态展示 | 用户发现popup弹出会触发blur(page失焦)，移除交互控件，考试中禁用popup |

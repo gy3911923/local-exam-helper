@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "本地题库答题助手",
-  "version": "1.0.0",
-  "description": "基于自有本地题库，自动识别网页考试题目并匹配作答。纯本地运行，零切屏风险。",
+  "name": "页面辅助工具",
+  "version": "1.3.3",
+  "description": "页面功能辅助扩展",
   "icons": {
     "48": "assets/icon.png",
     "128": "assets/icon.png"
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -44,7 +45,7 @@
   ],
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "本地题库答题助手"
+    "default_title": "页面辅助工具"
   },
   "commands": {
     "toggle-helper": {

@@ -158,12 +158,17 @@ const BankManager = {
     const files = event.target.files;
     if (!files.length) return;
 
-    let success = 0, failed = 0, duplicates = 0;
+    let success = 0, failed = 0, duplicates = 0, totalQuestions = 0;
+    const errors = [];
 
     for (const file of files) {
       try {
         const data = await this._parseFile(file);
-        if (!data || data.length === 0) { failed++; continue; }
+        if (!data || data.length === 0) {
+          failed++;
+          errors.push(`${file.name}: 解析结果为空，检查文件格式`);
+          continue;
+        }
 
         const bankName = file.name.replace(/\.(xlsx|xls|json)$/i, '');
 
@@ -174,6 +179,7 @@ const BankManager = {
 
         // 去重
         const unique = this._deduplicateQuestions(data);
+        const dupsInFile = data.length - unique.length;
 
         const bank = {
           id: Helpers.uid(),
@@ -185,17 +191,29 @@ const BankManager = {
         };
 
         await this._saveBank(bank);
-        duplicates += (data.length - unique.length);
+        duplicates += dupsInFile;
+        totalQuestions += unique.length;
         success++;
       } catch(e) {
         failed++;
+        errors.push(`${file.name}: ${e.message || '未知错误'}`);
+        console.error('导入失败:', file.name, e);
       }
     }
 
     event.target.value = '';
     await this._refreshList();
 
-    // 可选：通过chrome.runtime通知background更新
+    // 导入结果提示
+    let msg = [];
+    if (success > 0) msg.push(`✅ 成功入库 ${success} 个题库（共 ${totalQuestions} 题）`);
+    if (duplicates > 0) msg.push(`📋 去重 ${duplicates} 题`);
+    if (failed > 0) msg.push(`❌ 失败 ${failed} 个`);
+    if (errors.length > 0) msg.push(`\n详情: ${errors.join('\n')}`);
+
+    if (msg.length > 0) {
+      setTimeout(() => alert(msg.join('\n')), 200);
+    }
   },
 
   /** 解析文件 */
@@ -213,21 +231,45 @@ const BankManager = {
     throw new Error('Unsupported format');
   },
 
-  /** 解析Excel */
+  /** 解析Excel（兼容多种格式） */
   async _parseExcel(file) {
-    // 使用 SheetJS (xlsx.mini.js)
     if (typeof XLSX === 'undefined') {
-      throw new Error('XLSX library not loaded');
+      throw new Error('XLSX 库未加载');
     }
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-    return rows.map(row => ({
-      type: String(row['题型'] || 'single').replace('单选题','single').replace('多选题','multiple')
-             .replace('判断题','judge').replace('填空题','fill'),
+    // 先用数组模式读取，方便检测表头
+    const rawArr = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    if (!rawArr || rawArr.length < 2) {
+      throw new Error('表格数据不足（至少需要表头+1行数据）');
+    }
+
+    // 检测双行表头（第1行是标题如"题目导入模板"）
+    let headerRow = rawArr[0];
+    let dataStart = 1;
+    if (this._isTitleRow(rawArr[0]) && rawArr.length > 2) {
+      headerRow = rawArr[1];
+      dataStart = 2;
+    }
+
+    // 检测列结构，选择解析器
+    const headerStr = headerRow.map(String).join(',');
+    const isCompactFormat = headerStr.includes('题目名称') && headerStr.includes('选项') && !headerStr.includes('选项A');
+
+    if (isCompactFormat) {
+      return this._parseCompactExcel(rawArr.slice(dataStart), headerRow);
+    }
+
+    // 标准格式：题型|题干|选项A|B|C|D|答案|解析
+    const standardRows = XLSX.utils.sheet_to_json(sheet, { defval: '', range: dataStart - 1 });
+    return standardRows.map(row => ({
+      type: String(row['题型'] || 'single')
+        .replace('单选题','single').replace('多选题','multiple')
+        .replace('判断题','judge').replace('填空题','fill')
+        .replace('判断','judge').replace('单选','single').replace('多选','multiple'),
       question: String(row['题干'] || ''),
       options: {
         A: String(row['选项A'] || ''),
@@ -240,6 +282,62 @@ const BankManager = {
       answer: String(row['答案'] || ''),
       analysis: String(row['解析'] || '')
     }));
+  },
+
+  /** 判断是否为标题行（非数据表头） */
+  _isTitleRow(row) {
+    if (!row || !Array.isArray(row)) return false;
+    if (row.every(c => String(c || '').trim() === '')) return true;
+    const texts = row.map(String).join('');
+    if (texts.includes('模板') || texts.includes('导入')) return true;
+    const nonEmpty = row.map(c => String(c || '').trim()).filter(Boolean);
+    if (nonEmpty.length <= 2 && nonEmpty.some(s => s.includes('题目') || s.includes('题库'))) return true;
+    if (nonEmpty.length <= 2 && nonEmpty[0] && nonEmpty[0].length > 15) return true;
+    return false;
+  },
+
+  /** 解析紧凑格式：序号|题目名称|...|题目类型|...|选项(A-xx|B-xx)|答案 */
+  _parseCompactExcel(rows, headerRow) {
+    const cols = headerRow.map(String);
+    const idxName = cols.findIndex(c => c.includes('题目名称') || c.includes('题干'));
+    const idxType = cols.findIndex(c => c.includes('题目类型') || c.includes('题型'));
+    const idxAnswer = cols.findIndex(c => c.includes('答案'));
+    const idxOptions = cols.findIndex(c => c === '选项' || c.startsWith('选项'));
+
+    return rows.map((row, i) => {
+      const typeStr = String(row[idxType] || '').trim();
+      let type = 'single';
+      if (/多选/.test(typeStr)) type = 'multiple';
+      else if (/判断/.test(typeStr)) type = 'judge';
+      else if (/填空/.test(typeStr)) type = 'fill';
+      else if (/单选/.test(typeStr)) type = 'single';
+
+      // 解析紧凑选项格式 "A-正确|B-错误" 或 "A、参加考试|B、经领导批准|C、..."
+      const optStr = String(row[idxOptions] || '');
+      const options = {};
+      const optParts = optStr.split(/[|｜]/);
+      optParts.forEach(part => {
+        const m = part.trim().match(/^([A-H])\s*[-、.—\s]\s*(.+)/);
+        if (m) {
+          options[m[1]] = m[2].trim();
+        }
+      });
+
+      let answer = String(row[idxAnswer] || '').trim();
+      // 判断题型标准化答案
+      if (type === 'judge') {
+        if (/^(A|正确|对|√|✓|是|yes|true)$/i.test(answer)) answer = '正确';
+        else if (/^(B|错误|错|×|✗|否|no|false)$/i.test(answer)) answer = '错误';
+      }
+
+      return {
+        type,
+        question: String(row[idxName] || '').trim(),
+        options,
+        answer,
+        analysis: ''
+      };
+    }).filter(r => r.question.length > 0);
   },
 
   /** 题目去重 */

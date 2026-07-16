@@ -72,13 +72,13 @@ body {
 <body>
 
 <div class="warning-bar">
-  ⚠️ 考试中请勿点开此面板！<br>弹出即触发页面失焦，可能被检测
+  ⚠️ 考试期间请勿点开<br>弹出即触发页面失焦
 </div>
 
 <div class="status-section">
   <div class="status-dot" id="statusDot"></div>
   <div class="status-info">
-    <div class="status-title" id="statusTitle">未开启</div>
+    <div class="status-title" id="statusTitle">就绪</div>
     <div class="status-sub" id="statusSub">按 Ctrl+Shift+E 开关</div>
   </div>
 </div>
@@ -104,23 +104,23 @@ body {
 
 <div class="instruction">
   <div class="instruction-title">快捷键</div>
-  <div class="instruction-item"><b>Ctrl+Shift+E</b> — 普通模式开关（有悬浮窗）</div>
-  <div class="instruction-item"><b>Ctrl+Shift+H</b> — 隐形模式开关（无界面）</div>
-  <div class="instruction-item">监考走动时按 Ctrl+Shift+H 切隐形</div>
+  <div class="instruction-item"><b>Ctrl+Shift+E</b> — 标准模式</div>
+  <div class="instruction-item"><b>Ctrl+Shift+H</b> — 后台模式</div>
+  <div class="instruction-item">后台模式不显示任何界面</div>
 </div>
 
 <div class="btn-row">
-  <button class="safe-btn" onclick="openBankManager()" style="--color:#1a73e8;border-color:#1a73e8">
+  <button class="safe-btn" id="btnBankManager" style="--color:#1a73e8;border-color:#1a73e8">
     📚 打开题库管理
     <span class="hint-text">考试前操作，考前配置完毕即可</span>
   </button>
-  <button class="safe-btn" onclick="openSettings()">
+  <button class="safe-btn" id="btnSettings">
     ⚙️ 打开设置面板
     <span class="hint-text">调整匹配阈值、OCR密钥（如有）</span>
   </button>
 </div>
 
-<div class="footer">纯本地 · 无外网 · 零切屏</div>
+<div class="footer">纯本地 · 无外网 · 零切屏 · v1.2</div>
 
 <script src="popup.js"></script>
 </body>

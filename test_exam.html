@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>安全准入考试</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"Microsoft YaHei","PingFang SC",sans-serif; font-size:14px; color:#333; background:#f0f2f5; min-height:100vh; }
+.top-nav { height:48px; background:#38a5a1; color:#fff; display:flex; align-items:center; padding:0 24px; font-size:16px; font-weight:600; box-shadow:0 2px 4px rgba(0,0,0,.1); }
+.top-nav .nav-title { flex:1; }
+.top-nav .nav-exit { font-size:13px; font-weight:400; opacity:.85; cursor:pointer; }
+.main-layout { display:flex; height:calc(100vh - 48px); }
+.left-sidebar { width:240px; background:#f5fafa; padding:12px 0; overflow-y:auto; border-right:1px solid #e8edf0; }
+.section-header { background:#38a5a1; color:#fff; font-size:13px; font-weight:600; padding:8px 16px; margin:0 8px 8px; border-radius:2px; }
+.exam-info { background:#fff; margin:0 8px 12px; padding:12px 16px; border-radius:2px; font-size:13px; }
+.exam-info .row { display:flex; margin-bottom:6px; }
+.exam-info .label { color:#666; width:56px; flex-shrink:0; }
+.exam-info .value.time { color:#e6a23c; font-weight:600; }
+.answer-status { display:flex; gap:16px; padding:8px 16px; font-size:12px; color:#666; margin:0 8px 12px; background:#fff; border-radius:2px; }
+.dot { display:inline-block; width:12px; height:12px; margin-right:4px; border-radius:2px; vertical-align:middle; }
+.dot.done { background:#38a5a1; }
+.dot.cur { background:#f5fafa; border:1px solid #38a5a1; }
+.dot.pend { border:1px solid #ddd; background:#fff; }
+.progress-box { background:#fff; margin:0 8px 12px; padding:12px 16px; border-radius:2px; font-size:12px; }
+.progress-bar { height:6px; background:#eee; border-radius:3px; margin:6px 0; }
+.progress-inner { height:100%; background:#38a5a1; border-radius:3px; transition:width .3s; }
+.q-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:0 16px; max-height:200px; overflow-y:auto; }
+.q-num { width:28px; height:28px; line-height:28px; text-align:center; border-radius:2px; font-size:12px; cursor:pointer; border:1px solid #ddd; background:#fff; color:#666; }
+.q-num:hover { border-color:#38a5a1; color:#38a5a1; }
+.q-num.active { background:#38a5a1; color:#fff; border-color:#38a5a1; }
+.q-num.done { background:#e8f5f5; border-color:#38a5a1; color:#38a5a1; }
+.right-main { flex:1; display:flex; flex-direction:column; padding:16px 20px; overflow:hidden; }
+.question-card { flex:1; background:#fff; border-radius:4px; padding:24px 28px; overflow-y:auto; }
+.q-header { display:flex; align-items:center; margin-bottom:16px; }
+.q-type-tag { background:#38a5a1; color:#fff; font-size:12px; padding:2px 10px; border-radius:2px; margin-right:12px; }
+.q-seq { font-size:16px; font-weight:600; }
+.q-stem { font-size:15px; line-height:1.8; margin-bottom:24px; padding:12px 16px; background:#f9fafb; border-left:3px solid #38a5a1; border-radius:0 4px 4px 0; }
+
+/* ===== Element UI 标准结构样式 ===== */
+.el-radio, .el-checkbox {
+  display: inline-flex; align-items: center; margin-right: 24px; margin-bottom: 12px;
+  cursor: pointer; font-size: 14px; color: #333; padding: 6px 10px; border-radius: 4px;
+  border: 1px solid transparent; transition: all .2s;
+}
+.el-radio:hover, .el-checkbox:hover { border-color: #38a5a1; background: #f5fafa; }
+.el-radio-group, .el-checkbox-group { display: flex; flex-direction: column; gap: 4px; }
+.el-radio__input, .el-checkbox__input { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
+.el-radio__inner, .el-checkbox__inner {
+  width: 16px; height: 16px; border: 1px solid #dcdfe6; border-radius: 50%;
+  display: inline-block; margin-right: 8px;
+}
+.el-checkbox__inner { border-radius: 2px; }
+.el-radio__original, .el-checkbox__original {
+  opacity: 0; position: absolute; width: 0; height: 0; margin: 0;
+}
+.el-radio__label, .el-checkbox__label { padding-left: 4px; line-height: 16px; }
+
+.action-bar { display:flex; justify-content:space-between; align-items:center; padding:16px 0; gap:12px; }
+.btn { padding:10px 24px; border-radius:4px; font-size:14px; cursor:pointer; border:1px solid #dcdfe6; background:#fff; color:#606266; }
+.btn:hover { color:#38a5a1; border-color:#38a5a1; }
+.btn-primary { background:#38a5a1; color:#fff; border-color:#38a5a1; }
+.btn-primary:hover { background:#277f7b; }
+.btn-warning { background:#e6a23c; color:#fff; border-color:#e6a23c; }
+.btn-group { display:flex; gap:8px; }
+.test-badge { position:fixed; top:8px; right:150px; background:#e6a23c; color:#fff; font-size:11px; padding:2px 10px; border-radius:10px; z-index:999; }
+.correct-hint { margin-top:12px; padding:8px 12px; background:#fef0f0; color:#f56c6c; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<div class="test-badge">🧪 模拟测试页</div>
+
+<div class="top-nav">
+  <span class="nav-title">安全准入考试 — 动火作业</span>
+  <span class="nav-exit" onclick="alert('退出考试')">退出考试</span>
+</div>
+
+<div class="main-layout">
+  <div class="left-sidebar">
+    <div class="section-header">📋 考试信息</div>
+    <div class="exam-info">
+      <div class="row"><span class="label">考生</span><span>郭扬</span></div>
+      <div class="row"><span class="label">时间</span><span class="value time">60分钟</span></div>
+      <div class="row"><span class="label">总分</span><span>100分</span></div>
+      <div class="row"><span class="label">合格</span><span>80分</span></div>
+    </div>
+    <div class="answer-status">
+      <span><span class="dot done"></span>已答</span>
+      <span><span class="dot pend"></span>未答</span>
+      <span><span class="dot cur"></span>当前</span>
+    </div>
+    <div class="progress-box">
+      <div style="display:flex;justify-content:space-between"><span>答题进度</span><span id="progText">0/4</span></div>
+      <div class="progress-bar"><div class="progress-inner" id="progBar" style="width:0%"></div></div>
+    </div>
+    <div class="section-header">📝 答题卡</div>
+    <div class="q-grid" id="qGrid"></div>
+  </div>
+
+  <div class="right-main">
+    <div class="question-card" id="qCard"></div>
+    <div class="action-bar">
+      <div></div>
+      <div class="btn-group">
+        <button class="btn" onclick="prev()">上一题</button>
+        <button class="btn" onclick="next()">下一题</button>
+        <button class="btn btn-warning" onclick="alert('交卷')">交卷</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 题库（匹配用户Excel） =====
+const Q = [
+  { seq:1, type:'判断', typeCode:'judge', stem:'一般情况下，可在带有压力（液体压力或气体压力）的设备上或带电的设备上进行焊接。', opt:{A:'正确',B:'错误'}, ans:'B' },
+  { seq:2, type:'判断', typeCode:'judge', stem:'经单位批准，可在油漆未干的结构或其他物体上进行焊接。', opt:{A:'正确',B:'错误'}, ans:'B' },
+  { seq:3, type:'单选', typeCode:'single', stem:'特种设备作业人员、特种作业人员、危险化学品从业人员应（ ）。', opt:{A:'参加考试',B:'经领导批准',C:'经设备运维管理单位批准',D:'依法取得资格证书'}, ans:'D' },
+  { seq:4, type:'单选', typeCode:'single', stem:'在带电设备周围（ ）使用钢卷尺、皮卷尺和线尺（夹有金属丝者）进行测量工作。', opt:{A:'可以',B:'禁止',C:'不宜',D:'在监护下可以'}, ans:'B' }
+];
+
+let idx = 0;
+let ans = {};
+ans[4] = 'C'; // 第4题故意选错
+
+function render() {
+  const q = Q[idx];
+  const g = document.getElementById('qGrid');
+  g.innerHTML = Q.map((x,i)=>{ let c='q-num'; if(i===idx)c+=' active'; else if(ans[x.seq]!==undefined)c+=' done'; return `<div class="${c}" onclick="go(${i})">${x.seq}</div>`; }).join('');
+
+  // 选项HTML（使用 Element UI 标准结构）
+  let opts = '';
+  if (q.typeCode === 'judge') {
+    opts = Object.entries(q.opt).map(([k,v]) => {
+      const sel = ans[q.seq]===k;
+      return `<label class="el-radio">
+        <span class="el-radio__input">
+          <span class="el-radio__inner"></span>
+          <input type="radio" class="el-radio__original" name="q${q.seq}" value="${k}"${sel?' checked':''}>
+        </span>
+        <span class="el-radio__label">${v}</span>
+      </label>`;
+    }).join('');
+  } else {
+    opts = Object.entries(q.opt).map(([k,v]) => {
+      const sel = ans[q.seq]===k;
+      return `<label class="el-radio">
+        <span class="el-radio__input">
+          <span class="el-radio__inner"></span>
+          <input type="radio" class="el-radio__original" name="q${q.seq}" value="${k}"${sel?' checked':''}>
+        </span>
+        <span class="el-radio__label">${k}. ${v}</span>
+      </label>`;
+    }).join('');
+  }
+
+  let hint = '';
+  if (q.seq===4 && ans[4] && ans[4]!==q.ans) {
+    hint = `<div class="correct-hint">⚠ 已选${ans[4]}（故意选错，测试纠错 — 正确答案应为${q.ans}）</div>`;
+  }
+
+  document.getElementById('qCard').innerHTML = `
+    <div class="q-header"><span class="q-type-tag">${q.type}</span><span class="q-seq">第 ${q.seq} 题</span></div>
+    <div class="q-stem">${q.stem}</div>
+    <div class="el-radio-group">${opts}</div>
+    ${hint}
+  `;
+
+  // 点击选项
+  document.querySelectorAll('.el-radio').forEach(el => {
+    el.addEventListener('click', function() {
+      const inp = this.querySelector('input');
+      ans[q.seq] = inp.value;
+      render();
+    });
+  });
+
+  document.getElementById('progText').textContent = Object.keys(ans).length + '/' + Q.length;
+  document.getElementById('progBar').style.width = Math.round(Object.keys(ans).length/Q.length*100) + '%';
+}
+function go(i){ idx=i; render(); }
+function prev(){ if(idx>0)idx--; render(); }
+function next(){ if(idx<Q.length-1)idx++; render(); }
+
+render();
+</script>
+</body>
+</html>

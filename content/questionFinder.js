@@ -97,48 +97,62 @@ const QuestionFinder = {
     };
   },
 
-  /** 向上查找题目容器 */
+  /**
+   * 向上查找题目容器
+   * 策略：找最小的祖先，要求：
+   *   1. 包含所有 input
+   *   2. 包含选项label之外的文本（即题干）
+   *   3. 不是 body/html/form
+   */
   _findQuestionContainer(inputs) {
-    // 找所有input的最近公共祖先
-    let ancestor = inputs[0].parentElement;
-    const maxDepth = 8;
+    const maxDepth = 10;
+    let cursor = inputs[0].parentElement;
+    let fallback = null;
 
-    for (let depth = 0; depth < maxDepth && ancestor; depth++) {
-      // 检查是否包含所有input
-      if (inputs.every(inp => ancestor.contains(inp))) {
-        // 如果不是太泛的祖先（比如body/html），就返回
-        const tag = ancestor.tagName.toLowerCase();
-        if (tag !== 'body' && tag !== 'html' && tag !== 'form') {
-          return ancestor;
-        }
+    for (let depth = 0; depth < maxDepth && cursor; depth++) {
+      if (cursor.nodeType !== 1) { cursor = cursor.parentElement; continue; }
+      const tag = cursor.tagName.toLowerCase();
+      if (tag === 'body' || tag === 'html' || tag === 'form') break;
+
+      // 必须包含所有input
+      if (!inputs.every(inp => cursor.contains(inp))) {
+        cursor = cursor.parentElement;
+        continue;
       }
-      ancestor = ancestor.parentElement;
+
+      // 第一个合格祖先先记下来（包含所有input但可能不含题干）
+      if (!fallback) fallback = cursor;
+
+      // 检查是否有"题干"：去除所有option-label后的剩余文本
+      const stemText = this._getStemTextFromNode(cursor);
+      if (stemText && stemText.length >= 4) {
+        return cursor;  // ✅ 找到了含题干的最小容器
+      }
+
+      cursor = cursor.parentElement;
     }
 
-    // 兜底：返回第一个input的父元素往上3级
-    let el = inputs[0].parentElement;
-    for (let i = 0; i < 3 && el; i++) el = el.parentElement;
-    return el || inputs[0].parentElement;
+    // 兜底：找不到含题干的容器时，返回最浅的合格祖先
+    return fallback || inputs[0].parentElement;
   },
 
-  /** 提取题干文本 */
-  _extractStemText(container, inputs) {
-    // 获取容器内所有文本，排除选项label中的文本
-    const clone = container.cloneNode(true);
-
-    // 移除选项相关的label
+  /** 从节点提取题干文本（去除所有选项label后剩余的文本） */
+  _getStemTextFromNode(node) {
+    const clone = node.cloneNode(true);
     const labels = clone.querySelectorAll('label');
     labels.forEach(label => {
       const inp = label.querySelector('input[type="radio"], input[type="checkbox"]');
       if (inp) label.remove();
     });
-
-    // 移除纯选项文本（紧跟在input后面的文本节点）
-    const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
-    return text;
+    return (clone.textContent || '').replace(/\s+/g, ' ').trim();
   },
 
-  /** 提取选项文本 */
+  /** 提取题干文本（去除所有选项label后剩余的文本） */
+  _extractStemText(container, inputs) {
+    return this._getStemTextFromNode(container);
+  },
+
+  /** 提取选项文本（兼容 Element UI / 标准表单 / 自定义结构） */
   _extractOptions(inputs, container) {
     const options = {};
     const labels = 'ABCDEFGH'.split('');
@@ -147,17 +161,25 @@ const QuestionFinder = {
       const input = inputs[i];
       let optionText = '';
 
-      // 尝试从关联label获取文本
-      if (input.id) {
+      // 策略1: Element UI — 找 .el-radio__label 或 .el-checkbox__label
+      const elWrapper = input.closest('.el-radio') || input.closest('.el-checkbox');
+      if (elWrapper) {
+        const elLabel = elWrapper.querySelector('.el-radio__label, .el-checkbox__label');
+        if (elLabel) {
+          optionText = (elLabel.textContent || '').trim();
+        }
+      }
+
+      // 策略2: 标准 label[for] 关联
+      if (!optionText && input.id) {
         const label = Helpers.safeQuery(`label[for="${input.id}"]`, container);
         if (label) optionText = (label.textContent || '').trim();
       }
 
-      // 如果没有label，从父元素获取
+      // 策略3: 父元素文本回退
       if (!optionText) {
         const parent = input.parentElement;
         if (parent) {
-          // 去掉input本身的文本，取label内容
           const clone = parent.cloneNode(true);
           const inpClone = clone.querySelector('input');
           if (inpClone) inpClone.remove();

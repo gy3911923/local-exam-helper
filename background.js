@@ -7,7 +7,7 @@
 const tabStates = {};
 
 // 初始化存储默认值
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   const defaults = {
     mode: 'off',  // off | normal | stealth
     matchThreshold: 0.7,
@@ -22,10 +22,34 @@ chrome.runtime.onInstalled.addListener(async () => {
       await chrome.storage.local.set({ [k]: v });
     }
   }
+
+  // 检查快捷键是否已绑定（首次安装时）
+  try {
+    const commands = await chrome.commands.getAll();
+    const unbound = commands.filter(c => !c.shortcut);
+    if (unbound.length > 0) {
+      console.warn('[答题助手] 以下快捷键未绑定，请到 chrome://extensions/shortcuts 设置：',
+        unbound.map(c => c.description).join('、'));
+      // 设置图标徽章提示
+      chrome.action.setBadgeText({ text: '!' });
+      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+      chrome.action.setTitle({ title: '快捷键未设置，请点击图标后右键→管理快捷键' });
+      // 首次安装时自动打开快捷键设置页
+      if (details.reason === 'install') {
+        chrome.tabs.create({
+          url: 'chrome://extensions/shortcuts',
+          active: true
+        });
+      }
+    }
+  } catch(e) { /* 静默 */ }
 });
 
 // 快捷键监听
 chrome.commands.onCommand.addListener(async (command) => {
+  // 快捷键正常触发 → 清除安装提醒徽章
+  chrome.action.setBadgeText({ text: '' });
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   const tabId = tab.id;
@@ -180,7 +204,9 @@ function _deleteBankFromDB(bankId) {
     req.onerror = () => resolve();
   });
 }
-  return new Promise((resolve, reject) => {
+/** 从IndexedDB获取所有题库 */
+function _getAllBanksFromDB() {
+  return new Promise((resolve) => {
     const req = indexedDB.open('ExamBanks', 1);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;

@@ -14,9 +14,12 @@ const ExamHelper = {
   _questions: [],
   _matchResults: [],
   _banks: [],
-  _answerMode: 'normal', // 'normal' | 'manual'（普通模式下子模式）
+  _answerMode: 'auto', // 'auto' | 'manual'
   _observer: null,
   _initialized: false,
+  _answeredQuestions: new Set(), // 已作答的题目stem文本哈希，避免重复作答
+  _totalCorrected: 0, // 累计纠错数
+  _totalFilled: 0, // 累计新增作答数
 
   /** 初始化 */
   async init() {
@@ -25,7 +28,7 @@ const ExamHelper = {
 
     try {
       const config = await chrome.storage.local.get(['matchThreshold', 'autoMode']);
-      this._answerMode = config.autoMode || 'normal';
+      this._answerMode = config.autoMode || 'auto';
     } catch(e) { /* ignore */ }
 
     // 监听来自 background 的消息
@@ -68,14 +71,60 @@ const ExamHelper = {
     this._startObserver();
   },
 
-  /** 隐形模式：仅自动答题，无界面 */
+  /** 隐形模式：后台答题，逐题间隔作答 */
   async _enableStealth() {
-    // 先清理旧界面
     FloatPanel.destroy();
     BankManager.destroy();
     await this._loadBanks();
     await this._scanAndAnswer();
-    this._startObserver();
+    // 隐形模式下逐题作答，每题间隔2-4秒模拟人类
+    await this._autoAnswerStealth(2000, 4000);
+  },
+
+  /**
+   * 隐形模式作答：逐题回答，每题间隔随机延迟
+   */
+  async _autoAnswerStealth(minDelay = 2000, maxDelay = 5000) {
+    let filled = 0, corrected = 0;
+
+    for (const mr of this._matchResults) {
+      const q = mr.question;
+      if (!q.inputElements || q.inputElements.length === 0) continue;
+
+      const key = q.normalizedStem || q.stemText;
+      if (this._answeredQuestions.has(key)) continue;
+
+      const alreadySelected = this._getSelectedInput(q);
+
+      if (mr.canAutoAnswer) {
+        const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
+
+        if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+          this._answeredQuestions.add(key);
+          continue;
+        }
+
+        // 每题等待2-4秒再答
+        await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
+
+        try {
+          if (alreadySelected && correctInput) {
+            this._fireClick(alreadySelected);
+            await Helpers.sleep(Helpers.randomDelay(50, 150));
+            this._fireClick(correctInput);
+            corrected++;
+          } else if (correctInput) {
+            this._fireClick(correctInput);
+            filled++;
+          }
+          this._answeredQuestions.add(key);
+        } catch(e) { /* ignore */ }
+      } else {
+        this._answeredQuestions.add(key);
+      }
+    }
+
+    // 隐形模式无浮窗，不更新 UI
   },
 
   /** 完全关闭 */
@@ -88,6 +137,9 @@ const ExamHelper = {
     }
     this._questions = [];
     this._matchResults = [];
+    this._answeredQuestions.clear();
+    this._totalCorrected = 0;
+    this._totalFilled = 0;
   },
 
   /** 加载激活题库 */
@@ -128,9 +180,7 @@ const ExamHelper = {
     const threshold = await this._getThreshold();
     this._matchResults = Matcher.matchAll(this._questions, this._banks, threshold);
 
-    if (this._answerMode === 'normal') {
-      await this._autoAnswer();
-    }
+    // 不为全部题目作答——等待悬停触发逐题作答
 
     // 仅普通模式显示悬浮窗
     if (this._mode === 'normal') {
@@ -138,12 +188,9 @@ const ExamHelper = {
         const { corrected, filled } = this._lastStats;
         const status = document.getElementById('__leh_status__');
         if (status) {
-          let extra = [];
-          if (corrected > 0) extra.push(`纠正${corrected}题`);
-          if (filled > 0) extra.push(`作答${filled}题`);
-          if (extra.length > 0) {
-            status.textContent = `🟢 运行中 · ` + extra.join(' · ');
-          }
+          const answered = this._answeredQuestions.size;
+          if (corrected > 0) status.textContent = `🟢 已答${answered}题 · 纠正${corrected}题`;
+          else if (filled > 0) status.textContent = `🟢 已答${answered}题`;
         }
       }
       if (this._matchResults.length > 0) {
@@ -153,63 +200,30 @@ const ExamHelper = {
     }
   },
 
-  /** 自动作答（含已选纠错） */
-  async _autoAnswer() {
-    let corrected = 0;
-    let filled = 0;
-
-    for (const mr of this._matchResults) {
-      const q = mr.question;
-      if (!q.inputElements || q.inputElements.length === 0) continue;
-
-      // 检测当前已选状态
-      const alreadySelected = this._getSelectedInput(q);
-
-      if (mr.canAutoAnswer) {
-        // 有高置信度匹配
-        const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
-
-        if (alreadySelected) {
-          // 已选 → 检查是否正确
-          if (this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
-            continue; // 正确，跳过
-          }
-          // 选错了 → 纠正
-          await Helpers.sleep(Helpers.randomDelay(80, 200));
-          try {
-            alreadySelected.click(); // 先取消原选择
-            alreadySelected.dispatchEvent(new Event('change', { bubbles: true }));
-            await Helpers.sleep(Helpers.randomDelay(50, 150));
-            if (correctInput) {
-              correctInput.click();
-              correctInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            corrected++;
-          } catch(e) { /* ignore */ }
-        } else {
-          // 未选 → 自动勾选
-          if (correctInput) {
-            await Helpers.sleep(Helpers.randomDelay(50, 200));
-            try {
-              correctInput.click();
-              correctInput.dispatchEvent(new Event('change', { bubbles: true }));
-              filled++;
-            } catch(e) { /* ignore */ }
-          }
-        }
-      } else {
-        // 低置信度/冲突 → 不操作
-        continue;
-      }
-    }
-
-    // 记录本次答题统计
-    this._lastStats = { corrected, filled };
+  /**
+   * Vue/Element UI 兼容的选项点击
+   * 同时触发 click + change + input 事件，确保 Vue 的 v-model 更新
+   */
+  _fireClick(input) {
+    input.click();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    // Element UI 额外：点击 .el-radio__inner 触发视觉切换
+    const inner = input.parentElement?.querySelector('.el-radio__inner, .el-checkbox__inner');
+    if (inner) inner.click();
   },
 
-  /** 获取题目当前已选中的input */
+  /** 获取题目当前已选中的input（兼容 Element UI 的 .is-checked 类） */
   _getSelectedInput(q) {
-    return q.inputElements.find(el => el.checked) || null;
+    // 优先用原生 checked 属性
+    const checked = q.inputElements.find(el => el.checked);
+    if (checked) return checked;
+
+    // Element UI 回退：检查 .el-radio.is-checked 或 .el-checkbox.is-checked
+    return q.inputElements.find(el => {
+      const wrapper = el.closest('.el-radio') || el.closest('.el-checkbox');
+      return wrapper && wrapper.classList.contains('is-checked');
+    }) || null;
   },
 
   /** 根据答案文本找到对应input */
@@ -285,19 +299,51 @@ const ExamHelper = {
            label.toUpperCase().startsWith(correctLetter + ')');
   },
 
-  /** 绑定题目hover事件 */
+  /** 绑定题目hover事件：鼠标移到哪题就答哪题 */
   _bindHoverEvents() {
     for (const mr of this._matchResults) {
       if (!mr.question.container) continue;
       const container = mr.question.container;
 
-      container.addEventListener('mouseenter', () => {
+      container.addEventListener('mouseenter', async () => {
         if (this._mode !== 'normal') return;
-        FloatPanel.showResult(mr.question, mr);
-      });
 
-      container.addEventListener('mouseleave', () => {
-        // 不立即清空，保持最后结果
+        // 显示匹配结果
+        FloatPanel.showResult(mr.question, mr);
+
+        // 悬停触发逐题作答（已答过/低置信度/冲突 → 跳过）
+        const q = mr.question;
+        if (!q.inputElements || q.inputElements.length === 0) return;
+
+        const key = q.normalizedStem || q.stemText;
+        if (this._answeredQuestions.has(key)) return;
+
+        if (mr.canAutoAnswer) {
+          const alreadySelected = this._getSelectedInput(q);
+          if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+            this._answeredQuestions.add(key);
+            return; // 已正确，跳过
+          }
+
+          const correctInput = this._findInputByAnswer(q, mr.bestAnswer);
+          if (!correctInput) return;
+
+          try {
+            if (alreadySelected) {
+              await Helpers.sleep(Helpers.randomDelay(80, 200));
+              this._fireClick(alreadySelected);
+              await Helpers.sleep(Helpers.randomDelay(50, 150));
+            } else {
+              await Helpers.sleep(Helpers.randomDelay(100, 300));
+            }
+            this._fireClick(correctInput);
+            this._answeredQuestions.add(key);
+            if (alreadySelected) this._totalCorrected++;
+            else this._totalFilled++;
+            // 更新浮窗状态
+            FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._totalCorrected);
+          } catch(e) { /* ignore */ }
+        }
       });
     }
   },
@@ -339,5 +385,4 @@ const ExamHelper = {
 // ===== 自启动 =====
 ExamHelper.init();
 
-// 暴露全局接口供popup和其他模块使用
-window.__ExamHelper = ExamHelper;
+// 不暴露全局变量（反检测）
