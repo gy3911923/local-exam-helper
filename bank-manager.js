@@ -233,10 +233,15 @@ function parseCompact(rows, cols) {
 
     const optStr = String(row[iOpt] || '');
     const options = {};
-    optStr.split(/[|｜]/).forEach(p => {
-      const m = p.trim().match(/^([A-H])\s*[-、.—\s]\s*(.+)/);
-      if (m) options[m[1]] = m[2].trim();
-    });
+    if (optStr && iOpt >= 0) {
+      optStr.split(/[|｜]/).forEach(p => {
+        // 多种选项格式: A、xxx  A.xxx  A、 xxx  A-xxx  A)xxx  A xxx
+        let m = p.trim().match(/^([A-H])\s*[-、.—)\s:：]\s*(.+)/);
+        if (!m) m = p.trim().match(/^([A-H])\s+(.+)/);  // A xxx
+        if (!m) m = p.trim().match(/^([A-H])([^A-H].+)/);  // Axxx
+        if (m) options[m[1]] = m[2].trim();
+      });
+    }
 
     let answer = String(row[iAns] || '').trim();
     if (type === 'judge') {

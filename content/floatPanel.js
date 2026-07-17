@@ -6,6 +6,43 @@
  */
 const FloatPanel = {
 
+  // 随机前缀——每次注入不同，页面无法靠固定签名检测
+  _px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+  _cssInjected: false,
+
+  /** 注入随机化CSS（仅一次） */
+  _injectCSS() {
+    if (this._cssInjected) return;
+    const px = this._px;
+    const style = document.createElement('style');
+    style.textContent = `
+      #${px}_panel{position:fixed;right:16px;bottom:16px;width:320px;height:160px;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:2147483646;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#e8e8f0;font-size:13px;user-select:none;transition:opacity .2s}
+      .${px}_header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,.04);cursor:move;border-bottom:1px solid #2a2a3e}
+      .${px}_title{font-weight:600;font-size:13px}
+      .${px}_status{font-size:11px;color:#64748b;background:rgba(100,116,139,.15);padding:2px 8px;border-radius:10px}
+      .${px}_status_active{color:#10b981!important;background:rgba(16,185,129,.15)!important}
+      .${px}_body{padding:8px 12px;overflow-y:auto;height:calc(100% - 35px);pointer-events:none}
+      .${px}_placeholder{text-align:center;padding:20px 0;color:#64748b}
+      .${px}_placeholder p{margin:4px 0 0}
+      .${px}_placeholder small{font-size:11px;opacity:.7;word-break:break-all}
+      .${px}_warn{color:#f59e0b;font-size:12px;font-weight:600;padding:4px 8px;background:rgba(245,158,11,.1);border-radius:6px;margin-bottom:8px}
+      .${px}_ok{color:#10b981;font-size:12px;padding:4px 8px;background:rgba(16,185,129,.1);border-radius:6px;margin-bottom:8px}
+      .${px}_result{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+      .${px}_result:last-child{border-bottom:none}
+      .${px}_stem{font-size:11px;color:#8890a0;line-height:1.4;margin-bottom:4px}
+      .${px}_answer_row{display:flex;align-items:center;justify-content:space-between}
+      .${px}_answer{font-size:14px;font-weight:700}
+      .${px}_score{font-size:11px;font-weight:600;padding:1px 6px;border-radius:8px}
+      .${px}_options{font-size:11px;color:#64748b;margin-top:2px}
+      .${px}_opt_answer{color:#10b981;font-weight:600}
+      .${px}_opt{color:#64748b}
+      .${px}_analysis{font-size:11px;color:#94a3b8;margin-top:2px;border-left:2px solid #334155;padding-left:6px}
+      .${px}_resize{position:absolute;bottom:2px;right:2px;width:16px;height:16px;cursor:nwse-resize;pointer-events:auto;background:linear-gradient(135deg,transparent 50%,#334155 50%);border-radius:0 0 8px 0}
+    `;
+    document.head.appendChild(style);
+    this._cssInjected = true;
+  },
+
   _panel: null,
   _dragging: false,
   _resizing: false,
@@ -25,21 +62,23 @@ const FloatPanel = {
   /** 创建悬浮窗DOM */
   create() {
     if (this._panel) return;
+    this._injectCSS();
+    const px = this._px;
 
     const panel = document.createElement('div');
-    panel.id = '__leh_panel__';
+    panel.id = `${px}_panel`;
     panel.innerHTML = `
-      <div class="__leh_header__" id="__leh_header__">
-        <span class="__leh_title__">📌 页面工具</span>
-        <span class="__leh_status__" id="__leh_status__">⏸ 未激活</span>
+      <div class="${px}_header" id="${px}_header">
+        <span class="${px}_title">📌 页面工具</span>
+        <span class="${px}_status" id="${px}_status">⏸ 未激活</span>
       </div>
-      <div class="__leh_body__" id="__leh_body__">
-        <div class="__leh_placeholder__">
+      <div class="${px}_body" id="${px}_body">
+        <div class="${px}_placeholder">
           <span style="font-size:28px">🔍</span>
           <p>悬停题目查看匹配结果</p>
         </div>
       </div>
-      <div class="__leh_resize__" id="__leh_resize__"></div>
+      <div class="${px}_resize" id="${px}_resize"></div>
     `;
     document.body.appendChild(panel);
     this._panel = panel;
@@ -72,22 +111,24 @@ const FloatPanel = {
 
   /** 绑定拖拽/缩放事件 */
   _bindEvents() {
-    const header = document.getElementById('__leh_header__');
-    const resizeHandle = document.getElementById('__leh_resize__');
+    const px = this._px;
+    const header = document.getElementById(`${px}_header`);
+    const resizeHandle = document.getElementById(`${px}_resize`);
     if (!header) return;
 
     // 移除旧监听器
     if (this._onHeaderDown) header.removeEventListener('mousedown', this._onHeaderDown);
     if (this._onResizeDown && resizeHandle) resizeHandle.removeEventListener('mousedown', this._onResizeDown);
 
-    // 拖拽 — 命名函数
+    // 拖拽 — 命名函数 + pointer capture 防丢失
     const self = this;
     this._onHeaderDown = function(e) {
-      if (e.target === resizeHandle || e.target.closest('#__leh_resize__')) return;
+      if (e.target === resizeHandle || e.target.closest(`#${px}_resize`)) return;
       self._dragging = true;
       const rect = self._panel.getBoundingClientRect();
       self._offsetX = e.clientX - rect.left;
       self._offsetY = e.clientY - rect.top;
+      self._panel.setPointerCapture(e.pointerId);
       e.preventDefault();
     };
     header.addEventListener('mousedown', this._onHeaderDown);
@@ -100,6 +141,7 @@ const FloatPanel = {
         self._offsetY = e.clientY;
         self._startW = self._panel.offsetWidth;
         self._startH = self._panel.offsetHeight;
+        self._panel.setPointerCapture(e.pointerId);
         e.preventDefault();
         e.stopPropagation();
       };
@@ -126,14 +168,15 @@ const FloatPanel = {
     };
     document.addEventListener('mousemove', this._onMouseMove);
 
-    // mouseup — 命名函数 + 全局安全释放
+    // mouseup — 命名函数 + 释放 pointer capture
     if (this._onMouseUp) document.removeEventListener('mouseup', this._onMouseUp);
-    this._onMouseUp = function() {
+    this._onMouseUp = function(e) {
       if (self._dragging || self._resizing) {
         self._savePosition();
       }
       self._dragging = false;
       self._resizing = false;
+      if (self._panel) self._panel.releasePointerCapture(e.pointerId);
     };
     document.addEventListener('mouseup', this._onMouseUp);
 
@@ -179,14 +222,15 @@ const FloatPanel = {
 
   /** 显示匹配结果 */
   showResult(question, matchResult) {
-    const body = document.getElementById('__leh_body__');
+    const px = this._px;
+    const body = document.getElementById(`${px}_body`);
     if (!body) return;
 
     const { results, canAutoAnswer, status } = matchResult;
 
     if (results.length === 0) {
       body.innerHTML = `
-        <div class="__leh_placeholder__">
+        <div class="${px}_placeholder">
           <span style="font-size:24px">❓</span>
           <p>未找到匹配题目</p>
           <small>${this._truncate(question.stemText, 60)}</small>
@@ -201,28 +245,32 @@ const FloatPanel = {
     let html = '';
 
     if (status === 'conflict') {
-      html += `<div class="__leh_warn__">⚠️ 答案存疑，未自动勾选</div>`;
+      html += `<div class="${px}_warn">⚠️ 答案存疑，未自动勾选</div>`;
     } else if (status === 'low_confidence') {
-      html += `<div class="__leh_warn__">⚠️ 匹配置信度不足，请人工确认</div>`;
+      html += `<div class="${px}_warn">⚠️ 匹配置信度不足，请人工确认</div>`;
     } else {
-      html += `<div class="__leh_ok__">✅ 已匹配 · 来源：${this._esc(best.bankName)}</div>`;
+      const optCount = best.options ? Object.keys(best.options).length : 0;
+      const optWarn = optCount > 0 && optCount < 3 && best.type !== 'judge' ? ` ⚠️${optCount}选项` : '';
+      html += `<div class="${px}_ok">✅ 已匹配 · 来源：${this._esc(best.bankName)}${optWarn}</div>`;
     }
 
     const showResults = results.slice(0, 2);
     showResults.forEach((r, i) => {
       html += `
-        <div class="__leh_result__">
-          <div class="__leh_stem__">${this._truncate(r.stemText, 80)}</div>
-          <div class="__leh_answer_row__">
-            <span class="__leh_answer__" style="color:${i===0 ? scoreColor : '#8890a0'}">
-              ${i===0 ? '⭐' : '··'} 答案: ${this._esc(r.answer)}
+        <div class="${px}_result">
+          <div class="${px}_stem">${this._truncate(r.stemText, 80)}</div>
+          <div class="${px}_answer_row">
+            <span class="${px}_answer" style="color:${i===0 ? scoreColor : '#8890a0'}">
+              ${i===0 ? '⭐' : '··'} 答案: ${this._formatAnswer(r.answer, r.options)}
             </span>
-            <span class="__leh_score__" style="background:${scoreColor}22;color:${scoreColor}">
+            <span class="${px}_score" style="background:${scoreColor}22;color:${scoreColor}">
               ${Math.round(r.score * 100)}%
             </span>
           </div>
-          ${r.options ? `<div class="__leh_options__">${this._formatOptions(r.options, r.answer)}</div>` : ''}
-          ${r.analysis ? `<div class="__leh_analysis__">${this._esc(r.analysis)}</div>` : ''}
+          ${r.options && Object.keys(r.options).length > 0
+            ? `<div class="${px}_options">${this._formatOptions(r.options, r.answer)}</div>`
+            : `<div class="${px}_options" style="color:#94a3b8;font-style:italic">（题库选项数据不完整）</div>`}
+          ${r.analysis ? `<div class="${px}_analysis">${this._esc(r.analysis)}</div>` : ''}
         </div>`;
     });
 
@@ -231,10 +279,11 @@ const FloatPanel = {
 
   /** 显示待机状态 */
   showIdle() {
-    const body = document.getElementById('__leh_body__');
+    const px = this._px;
+    const body = document.getElementById(`${px}_body`);
     if (!body) return;
     body.innerHTML = `
-      <div class="__leh_placeholder__">
+      <div class="${px}_placeholder">
         <span style="font-size:28px">🔍</span>
         <p>悬停题目查看匹配结果</p>
       </div>`;
@@ -242,7 +291,8 @@ const FloatPanel = {
 
   /** 更新状态标识 */
   updateStatus(enabled, activeBanksCount, answeredCount, correctedCount) {
-    const statusEl = document.getElementById('__leh_status__');
+    const px = this._px;
+    const statusEl = document.getElementById(`${px}_status`);
     if (!statusEl) return;
     if (enabled) {
       const parts = [];
@@ -256,10 +306,10 @@ const FloatPanel = {
         parts.push(`${activeBanksCount}个题库`);
       }
       statusEl.textContent = '🟢 ' + (parts.length ? parts.join(' · ') : '运行中');
-      statusEl.className = '__leh_status__ __leh_status_active__';
+      statusEl.className = `${px}_status ${px}_status_active`;
     } else {
       statusEl.textContent = '⏸ 就绪';
-      statusEl.className = '__leh_status__';
+      statusEl.className = `${px}_status`;
     }
   },
 
@@ -268,12 +318,33 @@ const FloatPanel = {
     return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
   },
 
+  _formatAnswer(answer, options) {
+    if (!answer) return '无';
+    if (!options || Object.keys(options).length === 0) return this._esc(answer);
+
+    // 判断答案：正确/错误 → 返回原文
+    if (/^(正确|错误|对|错)$/.test(answer)) return this._esc(answer);
+
+    // 字母答案：展开为 "D. 防火安全措施"
+    const letters = answer.toUpperCase().split('').filter(ch => /[A-H]/.test(ch));
+    if (letters.length > 0) {
+      return letters.map(k => {
+        const text = options[k] || '';
+        return text ? `${k}. ${text}` : k;
+      }).join(' · ');
+    }
+
+    return this._esc(answer);
+  },
+
   _formatOptions(options, answer) {
+    const px = this._px;
     const answerSet = new Set((answer || '').toUpperCase().split(''));
     return Object.entries(options || {})
+      .filter(([k, v]) => v && String(v).trim())
       .map(([k, v]) => {
         const isAnswer = answerSet.has(k);
-        return `<span class="${isAnswer ? '__leh_opt_answer__' : '__leh_opt__'}">${k}. ${v}</span>`;
+        return `<span class="${isAnswer ? `${px}_opt_answer` : `${px}_opt`}">${k}. ${this._esc(v)}</span>`;
       })
       .join(' ');
   },

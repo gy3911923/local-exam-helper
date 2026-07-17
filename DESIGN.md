@@ -274,7 +274,7 @@ for each 激活题库 (按优先级排序):
 - popup顶部醒目红色警告："考试中请勿点开此面板"
 - 所有实际功能（开关、题库管理）均通过页面内注入的UI完成
 
-### 5.2 扩展隐身
+### 5.3 扩展隐身
 
 ```javascript
 // 🔇 不声明 content_script（manifest.json 中为空数组）
@@ -291,7 +291,37 @@ chrome.action.onClicked.addListener(async (tab) => {
 // popup标题用中性表述（"页面工具"而非"答题助手"）
 ```
 
-### 5.3 自动作答防特征
+### 5.4 DOM 签名随机化（v1.5.0 新增）
+
+**问题**：之前版本所有注入元素使用固定 `__leh_` 前缀（14个ID/class），考试页面一行代码即可检测：
+
+```javascript
+// 旧版 — 固定签名，一抓一个准
+document.querySelector('[id*="__leh_"]')  // → 命中
+```
+
+**方案**：每次注入时用 `crypto.randomUUID()` 生成随机前缀，所有元素 ID/class 和 CSS 规则都使用动态名称：
+
+```javascript
+// floatPanel.js 顶部
+_px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+
+// 所有元素引用
+const panel = document.createElement('div');
+panel.id = this._px + '_panel';
+// CSS 规则通过 _injectCSS() 动态注入 <style> 标签
+```
+
+**效果**：
+
+```
+旧版: document.querySelector('[id*="__leh_"]')  → ✅ 命中
+新版: document.querySelector('[id*="x7a3b9c2d1e"]')  → ❌ 前缀每次不同
+```
+
+**CSS 动态注入**：不再走静态 `content.css` 文件，改为 `_injectCSS()` 在运行时创建 `<style>` 标签，所有选择器使用 `${px}_xxx` 模板字符串拼接。页面 JS 无法通过遍历 `document.styleSheets` 发现固定非本站规则。
+
+### 5.5 自动作答防特征
 
 ```javascript
 // 普通模式（v1默认）
@@ -360,6 +390,12 @@ local-exam-helper/
 |------|:---:|------|------|
 | 考试系统用Canvas渲染 | 5% | 插件完全无效 | v1不做，遇到后v2加OCR |
 | Shadow DOM封闭 | 10% | 无法读取题目 | 元素拾取兜底 |
+| 非标准DOM结构 | 30% | 识别率下降 | 正则降级匹配 |
+| 扩展被DOM签名检测 | <1% | 功能暴露 | v1.5.0 DOM随机前缀+动态CSS注入 |
+| 扩展被事件isTrusted检测 | <1% | 答题失效 | dispatchEvent的isTrusted=false，国网系统暂不检测此项 |
+| 行为模式被分析 | <1% | 自动化特征暴露 | Stealth模式随机延迟2-5s，考后可加扰动算法 |
+| matched结果误判 | 15% | 答错题 | 阈值可调+悬浮窗复核 |
+| 误点popup触发blur | 中 | 切屏检测告警 | popup纯展示+醒目警告；考试中只用快捷键 |题目 | 元素拾取兜底 |
 | 非标准DOM结构 | 30% | 识别率下降 | 正则降级匹配 |
 | 扩展被检测 | 3% | 功能暴露 | 隐身改造 |
 | matched结果误判 | 15% | 答错题 | 阈值可调+悬浮窗复核 |

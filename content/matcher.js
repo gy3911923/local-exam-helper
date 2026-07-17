@@ -9,7 +9,7 @@
 const Matcher = {
 
   /** 默认置信度阈值（低于此值不自动作答） */
-  DEFAULT_THRESHOLD: 0.7,
+  DEFAULT_THRESHOLD: 0.6,
 
   /**
    * 匹配单个题目
@@ -32,20 +32,23 @@ const Matcher = {
         let score = TextNormalizer.similarity(question.normalizedStem || '', normalizedBankQ);
 
         // 选项重叠率加权：题干相同但选项不同时降低得分
-        if (question.options && bankQ.options && Object.keys(question.options).length > 0) {
-          const qOpts = Object.values(question.options).map(v => TextNormalizer.normalize(v));
-          const bOpts = Object.values(bankQ.options).map(v => TextNormalizer.normalize(v));
-          let overlap = 0;
-          for (const qo of qOpts) {
-            if (bOpts.some(bo => bo.includes(qo) || qo.includes(bo))) overlap++;
-          }
-          if (qOpts.length > 0 && bOpts.length > 0) {
+        // 仅当两侧选项数量相近时才加权，防止题库数据残缺误伤匹配
+        if (question.options && bankQ.options) {
+          const qKeys = Object.keys(question.options).filter(k => question.options[k]);
+          const bKeys = Object.keys(bankQ.options).filter(k => bankQ.options[k]);
+          if (qKeys.length >= 2 && bKeys.length >= 2 && bKeys.length >= qKeys.length * 0.5) {
+            const qOpts = qKeys.map(k => TextNormalizer.normalize(question.options[k]));
+            const bOpts = bKeys.map(k => TextNormalizer.normalize(bankQ.options[k]));
+            let overlap = 0;
+            for (const qo of qOpts) {
+              if (bOpts.some(bo => bo.includes(qo) || qo.includes(bo))) overlap++;
+            }
             const overlapRate = overlap / Math.max(qOpts.length, bOpts.length);
             score = score * 0.6 + overlapRate * 0.4;  // 题干60% + 选项40%
           }
         }
 
-        if (score >= thr * 0.5) {  // 宽松收集，后续筛选
+        if (score >= thr * 0.7) {  // 0.7倍阈值收集，过滤完全不相关
           allResults.push({
             bankId: bank.id,
             bankName: bank.name,
