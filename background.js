@@ -66,7 +66,9 @@ chrome.commands.onCommand.addListener(async (command) => {
     // 后台双文件保存：MHTML（优先）→ 失败则 HTML 降级
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
-    const baseFilename = `../Desktop/exam_page_${ts}`;
+    // 注意：chrome.downloads.download 的 filename 不支持 ".." 路径遍历
+    // 文件只能保存到 Chrome 的默认下载目录（可在 chrome://settings/downloads 改为桌面）
+    const baseFilename = `exam_page_${ts}`;
     let savedFiles = [];
     let errors = [];
 
@@ -94,9 +96,11 @@ chrome.commands.onCommand.addListener(async (command) => {
             saveAs: false
           });
           savedFiles.push('.html (降级)');
+        } else {
+          errors.push('HTML降级: 内容为空');
         }
-      } catch (_) {
-        errors.push('HTML降级也失败');
+      } catch (e2) {
+        errors.push('HTML降级: ' + (e2.message || '未知错误'));
       }
     }
 
@@ -113,6 +117,8 @@ chrome.commands.onCommand.addListener(async (command) => {
           saveAs: false
         });
         savedFiles.push('_debug.json');
+      } else {
+        errors.push('诊断: 收集为空');
       }
     } catch (e) {
       errors.push('诊断: ' + e.message);
@@ -121,7 +127,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     // 通知页面
     const saved = savedFiles.length > 0;
     const msg = saved
-      ? `💾 已保存: ${savedFiles.join(', ')}`
+      ? `💾 已保存到下载目录: ${savedFiles.join(', ')}`
       : `❌ 保存失败: ${errors.join('; ')}`;
     try {
       await chrome.tabs.sendMessage(tabId, {
