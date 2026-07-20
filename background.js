@@ -62,6 +62,12 @@ chrome.commands.onCommand.addListener(async (command) => {
   } else if (command === 'toggle-stealth') {
     // 隐形模式: off ↔ stealth
     newState = (current === 'stealth') ? 'off' : 'stealth';
+  } else if (command === 'save-page') {
+    // 后台保存页面 → 通知 content script 抓取 HTML
+    try {
+      await chrome.tabs.sendMessage(tabId, { action: 'savePage' });
+    } catch (e) { /* content script 未加载 */ }
+    return;
   } else {
     return;
   }
@@ -159,6 +165,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.action === 'deleteBank') {
     _deleteBankFromDB(msg.bankId).then(() => sendResponse({ success: true }));
+    return true;
+  }
+
+  if (msg.action === 'savePage') {
+    // 静默保存页面 HTML（不弹对话框，不失焦）
+    const pageHtml = msg.html || '';
+    const title = (msg.title || 'exam_page').replace(/[\\/:*?"<>|]/g, '_');
+    const now = new Date();
+    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+    const filename = `${title}_${ts}.html`;
+
+    // 用 Blob + createObjectURL 避免 HTML 内容过长导致 data URL 失败
+    // 但 chrome.downloads.download 需要 url → 用 data URL 或 blob URL
+    // blob URL 在 service worker 中无法跨上下文使用 → 构造 data URL
+    const blob = new Blob(['\uFEFF' + pageHtml], { type: 'text/html;charset=utf-8' });
+    const reader = new FileReader();
+    reader.onload = () => {
+      chrome.downloads.download({
+        url: reader.result,
+        filename: filename,
+        saveAs: false  // ← 核心：不弹对话框，直接保存到默认下载目录
+      }).then(downloadId => {
+        sendResponse({ success: true, filename, downloadId });
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
+    };
+    reader.onerror = () => {
+      sendResponse({ success: false, error: 'Blob 读取失败' });
+    };
+    reader.readAsDataURL(blob);
     return true;
   }
 });

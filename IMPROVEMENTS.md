@@ -2,6 +2,14 @@
 
 ## 版本变更记录
 
+### v1.5.1（2026-07-20）
+
+| 变更项 | 类型 | 说明 |
+|--------|------|------|
+| 后台保存页面 | ✨ 功能 | Ctrl+Shift+S 静默保存完整页面 HTML，不弹对话框、不触发切屏检测 |
+| FloatPanel Toast 通知 | ✨ 功能 | `showToast()` 方法，保存成功/失败时在页面中央显示3秒通知 |
+| downloads 权限 | ⚙️ 配置 | manifest 新增 `downloads` 权限，使用 `chrome.downloads.download({saveAs:false})` 静默下载 |
+
 ### v1.5.0（2026-07-17）
 
 | 变更项 | 类型 | 说明 |

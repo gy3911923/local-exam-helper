@@ -42,6 +42,10 @@ const ExamHelper = {
       if (msg.action === 'showBankManager') {
         BankManager.show();
       }
+      if (msg.action === 'savePage') {
+        this._savePage().then(result => sendResponse(result));
+        return true; // 异步响应
+      }
       return true;
     });
   },
@@ -407,6 +411,33 @@ const ExamHelper = {
   setMode(mode) {
     this._mode = mode;
     chrome.storage.local.set({ autoMode: mode });
+  },
+
+  /** 后台保存当前完整页面 HTML（Ctrl+Shift+S 触发，无弹窗不失焦） */
+  async _savePage() {
+    try {
+      const html = document.documentElement.outerHTML;
+      const title = document.title || 'exam_page';
+
+      // 发送到 background 由 service worker 静默下载
+      const result = await chrome.runtime.sendMessage({
+        action: 'savePage',
+        html,
+        title
+      });
+
+      // 普通模式下显示通知
+      if (this._mode === 'normal' && result && result.success) {
+        FloatPanel.showToast('💾 页面已保存: ' + result.filename);
+      }
+
+      return result;
+    } catch(e) {
+      if (this._mode === 'normal') {
+        FloatPanel.showToast('❌ 保存失败: ' + (e.message || '未知错误'));
+      }
+      return { success: false, error: e.message };
+    }
   }
 };
 

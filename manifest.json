@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "页面辅助工具",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "页面功能辅助扩展",
   "icons": {
     "48": "assets/icon.png",
@@ -10,7 +10,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -59,6 +60,12 @@
         "default": "Ctrl+Shift+H"
       },
       "description": "隐形模式开关（纯后台作答，无界面）"
+    },
+    "save-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S"
+      },
+      "description": "后台保存当前页面（不弹窗、不失焦）"
     }
   }
 }

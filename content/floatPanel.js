@@ -349,5 +349,44 @@ const FloatPanel = {
       .join(' ');
   },
 
-  _esc(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  _esc(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+
+  /**
+   * 短暂 Toast 通知（3秒自动消失）
+   * 用于保存成功/失败等非阻塞反馈
+   */
+  showToast(message) {
+    const px = this._px;
+    // 移除旧 toast
+    const old = document.getElementById(px + '_toast');
+    if (old) old.remove();
+
+    const toast = document.createElement('div');
+    toast.id = px + '_toast';
+    toast.textContent = message;
+    Object.assign(toast.style, {
+      position: 'fixed',
+      bottom: '24px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'rgba(26,26,46,0.95)',
+      color: '#e8e8f0',
+      padding: '10px 24px',
+      borderRadius: '8px',
+      fontSize: '14px',
+      zIndex: '2147483647',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      opacity: '1',
+      transition: 'opacity 0.4s ease',
+      pointerEvents: 'none'
+    });
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 400);
+    }, 3000);
+  }
 };
