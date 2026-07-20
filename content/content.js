@@ -434,30 +434,51 @@ const ExamHelper = {
 
         const key = q.normalizedStem || q.stemText;
 
-        // 已答且当前选中仍是正确答案 → 跳过
+        // 答题逻辑：已正确→跳过 / 空白→自动选 / 自答错→纠一次 / 手动选→不碰
         if (mr.canAutoAnswer) {
           const alreadySelected = this._getSelectedInput(q);
+          const allSelected = this._getAllSelectedInputs(q);
+
+          // ① 已正确 → 跳过
           if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
             this._answeredQuestions.add(key);
             return;
           }
 
-          // 已有选择但不正确 → 只显示结果，不自动清空（让用户自主决定）
-          const allSelected = this._getAllSelectedInputs(q);
-          if (allSelected.length > 0) return;
+          // ② 完全空白 → 自动选择（无论能不能匹配，绝不锁选项）
+          if (allSelected.length === 0) {
+            try {
+              await Helpers.sleep(Helpers.randomDelay(100, 300));
+              const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
+              const clicked = await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+              if (clicked > 0) {
+                this._answeredQuestions.add(key);
+                FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
+              }
+            } catch(e) { /* ignore */ }
+            return;
+          }
 
-          // 完全空白 → 自动选择（无论题库能不能匹配到，不锁住选项）
-          try {
-            await Helpers.sleep(Helpers.randomDelay(100, 300));
-            // 传递题库选项文本用于文本匹配（不受选项序号影响）
-            const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
-            const clicked = await this._selectAnswers(q, mr.bestAnswer, bankOptions);
-            if (clicked > 0) {
-              this._answeredQuestions.add(key);
+          // ③ 有选择但错了，且是我们之前自动选的 → 纠错一次
+          if (this._answeredQuestions.has(key) && !this._correctedQuestions.has(key)) {
+            try {
+              await Helpers.sleep(Helpers.randomDelay(80, 200));
+              for (const input of allSelected) {
+                input.checked = false;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                const w = input.closest('.el-radio, .el-checkbox');
+                if (w) w.classList.remove('is-checked');
+              }
+              await Helpers.sleep(Helpers.randomDelay(50, 150));
+              const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
+              await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+              this._correctedQuestions.add(key);
               FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
-            }
-            // 选不中也绝不锁住——用户依然可以手动点击
-          } catch(e) { /* ignore */ }
+            } catch(e) { /* ignore */ }
+            return;
+          }
+
+          // ④ 有选择但错了，不是我们自动选的 → 只显示浮窗，不碰用户选择
         }
       });
     }
