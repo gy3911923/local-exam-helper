@@ -2,6 +2,14 @@
 
 ## 版本变更记录
 
+### v1.5.3（2026-07-20）
+
+| 变更项 | 类型 | 说明 |
+|--------|------|------|
+| 保存格式升级为 MHTML | ✨ 优化 | 用 `chrome.pageCapture.saveAsMHTML()` 一步捕获完整页面，CSS/JS/图片全部内嵌，单文件打开即完整布局 |
+| 简化保存管线 | ♻️ 重构 | 去掉 content→background 往返，background 直接调用 pageCapture API |
+| pageCapture 权限 | ⚙️ 配置 | manifest 新增 `pageCapture` 权限 |
+
 ### v1.5.2（2026-07-20）
 
 | 变更项 | 类型 | 说明 |
