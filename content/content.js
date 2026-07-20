@@ -318,6 +318,24 @@ const ExamHelper = {
     return '';
   },
 
+  /** 判断 input 是否在 UI 中显示为选中状态（兼容 Element UI） */
+  _isInputCheckedInUI(input) {
+    if (input.checked) return true;
+    const wrapper = input.closest('.el-radio, .el-checkbox');
+    return !!(wrapper && wrapper.classList.contains('is-checked'));
+  },
+
+  /** 获取题目所有已选中的 input（单选返回单个，多选返回数组） */
+  _getAllSelectedInputs(q) {
+    const selected = [];
+    for (const input of q.inputElements) {
+      if (this._isInputCheckedInUI(input)) {
+        selected.push(input);
+      }
+    }
+    return selected;
+  },
+
   /** 判断已选答案是否与正确答案一致 */
   _isSameAnswer(selectedInput, correctAnswer, q) {
     const type = q.type || 'single';
@@ -328,11 +346,25 @@ const ExamHelper = {
       return isCorrect === isSelectedCorrect;
     }
 
-    // 单选/多选：比较选项字母
-    const selectedValue = selectedInput.value;
-    const correctLetter = correctAnswer?.toUpperCase();
+    // 多选题：比较选中集合而非单个字母
+    if (type === 'multiple') {
+      const correctLetters = (correctAnswer || '').toUpperCase().split('').filter(ch => /[A-H]/.test(ch));
+      if (correctLetters.length === 0) return false;
+      const selectedLetters = [];
+      for (const input of q.inputElements) {
+        if (this._isInputCheckedInUI(input)) {
+          const m = this._getInputLabel(input).match(/^([A-H])[.、) ]/);
+          if (m) selectedLetters.push(m[1].toUpperCase());
+        }
+      }
+      if (selectedLetters.length === 0) return false;
+      const correctSet = new Set(correctLetters);
+      const selectedSet = new Set(selectedLetters);
+      return correctSet.size === selectedSet.size && [...correctSet].every(l => selectedSet.has(l));
+    }
 
-    // 检查input是否对应正确答案的字母
+    // 单选：比较选项字母
+    const correctLetter = correctAnswer?.toUpperCase();
     const label = this._getInputLabel(selectedInput);
     return label.toUpperCase().startsWith(correctLetter + '.') ||
            label.toUpperCase().startsWith(correctLetter + '、') ||
@@ -369,20 +401,25 @@ const ExamHelper = {
           }
 
           try {
-            if (alreadySelected) {
+            const allSelected = this._getAllSelectedInputs(q);
+            const hasWrongAnswer = allSelected.length > 0;
+
+            if (hasWrongAnswer) {
               await Helpers.sleep(Helpers.randomDelay(80, 200));
-              // 直接取消选中，兼容 Element UI 和纯 HTML 页面
-              alreadySelected.checked = false;
-              alreadySelected.dispatchEvent(new Event('change', { bubbles: true }));
-              const w = alreadySelected.closest('.el-radio, .el-checkbox');
-              if (w) { w.classList.remove('is-checked'); w.classList.remove('el-radio'); /* wrong qclaw selector */ }
+              // 清空全部已选项（多选时不能只清第一个，否则 toggle 会反向操作）
+              for (const input of allSelected) {
+                input.checked = false;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                const w = input.closest('.el-radio, .el-checkbox');
+                if (w) w.classList.remove('is-checked');
+              }
               await Helpers.sleep(Helpers.randomDelay(50, 150));
             } else {
               await Helpers.sleep(Helpers.randomDelay(100, 300));
             }
             await this._selectAnswers(q, mr.bestAnswer);
             this._answeredQuestions.add(key);
-            if (alreadySelected) this._correctedQuestions.add(key);
+            if (hasWrongAnswer) this._correctedQuestions.add(key);
             FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
           } catch(e) { /* ignore */ }
         }

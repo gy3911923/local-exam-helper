@@ -127,7 +127,8 @@ chrome.commands.onCommand.addListener(async (command) => {
       await chrome.tabs.sendMessage(tabId, {
         action: 'savePageDone',
         success: saved,
-        filename: msg
+        filename: msg,
+        error: saved ? undefined : errors.join('; ')
       });
     } catch (e) { /* ignore */ }
     return;
