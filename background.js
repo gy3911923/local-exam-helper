@@ -63,13 +63,15 @@ chrome.commands.onCommand.addListener(async (command) => {
     // 隐形模式: off ↔ stealth
     newState = (current === 'stealth') ? 'off' : 'stealth';
   } else if (command === 'save-page') {
-    // 后台双文件保存：MHTML（页面快照） + JSON（JS/事件/环境诊断）
+    // 后台双文件保存：MHTML（优先）→ 失败则 HTML 降级
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
     const baseFilename = `../Desktop/exam_page_${ts}`;
+    let savedFiles = [];
+    let errors = [];
 
+    // ① 先尝试 MHTML（需要 pageCapture 权限 + http/https 协议）
     try {
-      // ① MHTML：pageCapture API 一步捕获完整页面
       const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
       const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
       await chrome.downloads.download({
@@ -77,18 +79,32 @@ chrome.commands.onCommand.addListener(async (command) => {
         filename: baseFilename + '.mhtml',
         saveAs: false
       });
-
-      // ② 诊断数据：从 content script 收集 JS 源码 + 事件 + 环境
-      let debugData = null;
+      savedFiles.push('.mhtml');
+    } catch (e) {
+      // pageCapture 失败（如 file:// 协议）→ 降级到 HTML
+      errors.push('MHTML: ' + e.message);
       try {
-        const debugResponse = await chrome.tabs.sendMessage(tabId, {
-          action: 'captureDebug'
-        });
-        debugData = debugResponse || null;
-      } catch (e) { /* content script 未加载或无 debugCapture */ }
+        const htmlResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureHtml' });
+        if (htmlResponse && htmlResponse.html) {
+          const htmlBlob = new Blob(['\uFEFF' + htmlResponse.html], { type: 'text/html;charset=utf-8' });
+          const htmlUrl = await _blobToDataUrl(htmlBlob);
+          await chrome.downloads.download({
+            url: htmlUrl,
+            filename: baseFilename + '.html',
+            saveAs: false
+          });
+          savedFiles.push('.html (降级)');
+        }
+      } catch (_) {
+        errors.push('HTML降级也失败');
+      }
+    }
 
-      if (debugData) {
-        const debugJson = JSON.stringify(debugData, null, 2);
+    // ② 诊断数据：从 content script 收集
+    try {
+      const debugResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureDebug' });
+      if (debugResponse) {
+        const debugJson = JSON.stringify(debugResponse, null, 2);
         const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
         const debugUrl = await _blobToDataUrl(debugBlob);
         await chrome.downloads.download({
@@ -96,28 +112,24 @@ chrome.commands.onCommand.addListener(async (command) => {
           filename: baseFilename + '_debug.json',
           saveAs: false
         });
+        savedFiles.push('_debug.json');
       }
-
-      // 通知页面
-      const toastMsg = debugData
-        ? `💾 已保存到桌面: exam_page_${ts}.mhtml + _debug.json`
-        : `💾 已保存到桌面: exam_page_${ts}.mhtml (诊断数据未捕获)`;
-      try {
-        await chrome.tabs.sendMessage(tabId, {
-          action: 'savePageDone',
-          success: true,
-          filename: toastMsg
-        });
-      } catch (e) { /* ignore */ }
     } catch (e) {
-      try {
-        await chrome.tabs.sendMessage(tabId, {
-          action: 'savePageDone',
-          success: false,
-          error: e.message
-        });
-      } catch (_) { /* ignore */ }
+      errors.push('诊断: ' + e.message);
     }
+
+    // 通知页面
+    const saved = savedFiles.length > 0;
+    const msg = saved
+      ? `💾 已保存: ${savedFiles.join(', ')}`
+      : `❌ 保存失败: ${errors.join('; ')}`;
+    try {
+      await chrome.tabs.sendMessage(tabId, {
+        action: 'savePageDone',
+        success: saved,
+        filename: msg
+      });
+    } catch (e) { /* ignore */ }
     return;
   } else {
     return;

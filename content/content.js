@@ -53,6 +53,9 @@ const ExamHelper = {
         this._captureDebug().then(data => sendResponse(data));
         return true; // 异步
       }
+      if (msg.action === 'captureHtml') {
+        sendResponse({ html: document.documentElement.outerHTML });
+      }
       return true;
     });
   },
