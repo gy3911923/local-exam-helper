@@ -67,6 +67,28 @@ body {
 .safe-btn .hint-text { font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
 
 .footer { padding: 8px 16px; text-align: center; font-size: 10px; color: #475569; border-top: 1px solid #1f1f35; }
+
+.save-tip {
+  margin: 8px 16px 0;
+  padding: 10px 12px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 8px;
+}
+.save-tip-title {
+  font-size: 12px; font-weight: 700; color: #fbbf24;
+  margin-bottom: 6px;
+}
+.save-tip-content {
+  font-size: 11px; color: #cbd5e1; line-height: 1.6;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.save-tip-warn {
+  font-size: 11px; color: #fca5a5; line-height: 1.5;
+  padding-top: 6px; border-top: 1px dashed rgba(251,191,36,0.2);
+}
 </style>
 </head>
 <body>
@@ -103,10 +125,23 @@ body {
 <div class="divider"></div>
 
 <div class="instruction">
-  <div class="instruction-title">快捷键</div>
-  <div class="instruction-item"><b>Ctrl+Shift+E</b> — 标准模式</div>
-  <div class="instruction-item"><b>Ctrl+Shift+H</b> — 后台模式</div>
-  <div class="instruction-item">后台模式不显示任何界面</div>
+  <div class="instruction-title">快捷键（背熟）</div>
+  <div class="instruction-item"><b>Ctrl+Shift+E</b> — 标准模式（右下角浮窗）</div>
+  <div class="instruction-item"><b>Ctrl+Shift+H</b> — 后台模式（零界面）</div>
+  <div class="instruction-item"><b>Ctrl+Shift+S</b> — <span style="color:#fbbf24">保存页面</span>（必考完按！）</div>
+</div>
+
+<div class="save-tip">
+  <div class="save-tip-title">💾 考试结束按 Ctrl+Shift+S</div>
+  <div class="save-tip-content">
+    保存双文件到 <b>桌面</b>：<br>
+    📄 <span id="fnHtml">exam_page_20260720_xxxxxx.html</span><br>
+    🔍 <span id="fnJson">exam_page_20260720_xxxxxx_debug.json</span>
+  </div>
+  <div class="save-tip-warn">
+    ⚠️ 考前必须 <b>chrome://settings/downloads</b><br>
+    位置改成「桌面」！否则找不着！
+  </div>
 </div>
 
 <div class="btn-row">
@@ -120,7 +155,7 @@ body {
   </button>
 </div>
 
-<div class="footer">纯本地 · 无外网 · 零切屏 · v1.2</div>
+<div class="footer">纯本地 · 无外网 · 零切屏 · v1.6.3</div>
 
 <script src="popup.js"></script>
 </body>
