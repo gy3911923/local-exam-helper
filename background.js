@@ -63,35 +63,52 @@ chrome.commands.onCommand.addListener(async (command) => {
     // 隐形模式: off ↔ stealth
     newState = (current === 'stealth') ? 'off' : 'stealth';
   } else if (command === 'save-page') {
-    // 后台 MHTML 保存（不弹对话框，不失焦）
+    // 后台双文件保存：MHTML（页面快照） + JSON（JS/事件/环境诊断）
+    const now = new Date();
+    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+    const baseFilename = `../Desktop/exam_page_${ts}`;
+
     try {
-      const now = new Date();
-      const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
-      const filename = `../Desktop/exam_page_${ts}.mhtml`;
-
-      // pageCapture.saveAsMHTML 一步捕获完整页面（含CSS/JS/图片）
-      const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
-      const reader = new FileReader();
-      const dataUrl = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Blob读取失败'));
-        reader.readAsDataURL(blob);
-      });
-
+      // ① MHTML：pageCapture API 一步捕获完整页面
+      const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
+      const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
       await chrome.downloads.download({
-        url: dataUrl,
-        filename,
+        url: mhtmlUrl,
+        filename: baseFilename + '.mhtml',
         saveAs: false
       });
 
-      // 通知页面显示 toast
+      // ② 诊断数据：从 content script 收集 JS 源码 + 事件 + 环境
+      let debugData = null;
+      try {
+        const debugResponse = await chrome.tabs.sendMessage(tabId, {
+          action: 'captureDebug'
+        });
+        debugData = debugResponse || null;
+      } catch (e) { /* content script 未加载或无 debugCapture */ }
+
+      if (debugData) {
+        const debugJson = JSON.stringify(debugData, null, 2);
+        const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
+        const debugUrl = await _blobToDataUrl(debugBlob);
+        await chrome.downloads.download({
+          url: debugUrl,
+          filename: baseFilename + '_debug.json',
+          saveAs: false
+        });
+      }
+
+      // 通知页面
+      const toastMsg = debugData
+        ? `💾 已保存到桌面: exam_page_${ts}.mhtml + _debug.json`
+        : `💾 已保存到桌面: exam_page_${ts}.mhtml (诊断数据未捕获)`;
       try {
         await chrome.tabs.sendMessage(tabId, {
           action: 'savePageDone',
           success: true,
-          filename
+          filename: toastMsg
         });
-      } catch (e) { /* content script 未加载 */ }
+      } catch (e) { /* ignore */ }
     } catch (e) {
       try {
         await chrome.tabs.sendMessage(tabId, {
@@ -269,5 +286,15 @@ function _getAllBanksFromDB() {
       };
     };
     req.onerror = () => resolve([]);
+  });
+}
+
+/** Blob → Data URL（用于 chrome.downloads.download） */
+function _blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Blob转DataURL失败'));
+    reader.readAsDataURL(blob);
   });
 }

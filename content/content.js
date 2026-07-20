@@ -44,10 +44,14 @@ const ExamHelper = {
       }
       if (msg.action === 'savePageDone') {
         if (msg.success) {
-          if (this._mode === 'normal') FloatPanel.showToast('💾 已保存到桌面: ' + msg.filename);
+          if (this._mode === 'normal') FloatPanel.showToast(msg.filename);
         } else {
           if (this._mode === 'normal') FloatPanel.showToast('❌ 保存失败: ' + (msg.error || '未知错误'));
         }
+      }
+      if (msg.action === 'captureDebug') {
+        this._captureDebug().then(data => sendResponse(data));
+        return true; // 异步
       }
       return true;
     });
@@ -414,6 +418,107 @@ const ExamHelper = {
   setMode(mode) {
     this._mode = mode;
     chrome.storage.local.set({ autoMode: mode });
+  },
+
+  /** 收集诊断数据：JS源码 + 事件监听 + 存储 + 环境（Ctrl+Shift+S 触发） */
+  async _captureDebug() {
+    const data = {
+      url: location.href,
+      title: document.title,
+      timestamp: new Date().toISOString(),
+      scripts: { inline: [], external: {} },
+      eventListeners: null,
+      dom0Events: null,
+      storage: { localStorage: {}, sessionStorage: {} },
+      globalNames: [],
+      meta: {}
+    };
+
+    // ① 收集所有 script 标签内容
+    const scripts = document.querySelectorAll('script');
+    for (const s of scripts) {
+      if (s.src) {
+        // 外部脚本 → fetch 获取源码
+        try {
+          const resp = await fetch(s.src, { credentials: 'include' });
+          if (resp.ok) {
+            data.scripts.external[s.src] = await resp.text();
+          } else {
+            data.scripts.external[s.src] = `[HTTP ${resp.status}]`;
+          }
+        } catch(e) {
+          data.scripts.external[s.src] = `[ERROR: ${e.message}]`;
+        }
+      } else if (s.textContent) {
+        data.scripts.inline.push(s.textContent);
+      }
+    }
+
+    // ② 事件监听记录（由 debugCapture.js 在 document_start 收集）
+    try {
+      if (window.___LEH_DEBUG___) {
+        data.eventListeners = window.___LEH_DEBUG___.getListeners();
+        data.dom0Events = window.___LEH_DEBUG___.getDOM0Events();
+      }
+    } catch(e) { /* ignore */ }
+
+    // ③ 存储
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        data.storage.localStorage[k] = localStorage.getItem(k);
+      }
+    } catch(e) { /* ignore */ }
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        data.storage.sessionStorage[k] = sessionStorage.getItem(k);
+      }
+    } catch(e) { /* ignore */ }
+
+    // ④ 全局对象名（排除浏览器内置属性）
+    const builtins = new Set(Object.getOwnPropertyNames(window).filter(k => {
+      try { return typeof window[k] === 'undefined' || window[k] === null; } catch(_) { return true; }
+    }));
+    try {
+      const customKeys = [];
+      for (const k of Object.getOwnPropertyNames(window)) {
+        if (builtins.has(k)) continue;
+        try {
+          const v = window[k];
+          const t = typeof v;
+          // 过滤明显是浏览器内置的
+          if (k.startsWith('webkit') || k.startsWith('on')) continue;
+          if (k === '___LEH_DEBUG___' || k === 'FloatPanel' || k === 'ExamHelper' ||
+              k === 'Matcher' || k === 'QuestionFinder' || k === 'BankManager' ||
+              k === 'TextNormalizer' || k === 'Helpers' || k === 'DB') continue;
+          if (t === 'function' || t === 'object') {
+            try {
+              const keys = t === 'object' && v ? Object.keys(v).slice(0, 5).join(',') : '';
+              customKeys.push(`${k} (${t}${keys ? ', keys: ' + keys : ''})`);
+            } catch(_) { customKeys.push(`${k} (${t})`); }
+          }
+        } catch(_) { /* ignore */ }
+      }
+      data.globalNames = customKeys.slice(0, 50); // 最多50个
+    } catch(e) { /* ignore */ }
+
+    // ⑤ 环境元数据
+    data.meta = {
+      userAgent: navigator.userAgent,
+      webdriver: navigator.webdriver || false,
+      platform: navigator.platform,
+      screenSize: `${screen.width}x${screen.height}`,
+      viewportSize: `${window.innerWidth}x${window.innerHeight}`,
+      documentReadyState: document.readyState,
+      cookieCount: document.cookie.split(';').length,
+      iframeCount: document.querySelectorAll('iframe').length,
+      scriptCount: scripts.length,
+      externalScriptCount: Object.keys(data.scripts.external).length,
+      inlineScriptCount: data.scripts.inline.length
+    };
+
+    return data;
   }
 };
 
