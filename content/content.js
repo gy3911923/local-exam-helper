@@ -104,26 +104,29 @@ const ExamHelper = {
       const key = q.normalizedStem || q.stemText;
       if (this._answeredQuestions.has(key)) continue;
 
-      const alreadySelected = this._getSelectedInput(q);
+      const allSelected = this._getAllSelectedInputs(q);
 
       if (mr.canAutoAnswer) {
-        if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+        // 已正确 → 跳过
+        if (allSelected.length > 0) {
+          const firstSel = allSelected[0];
+          if (this._isSameAnswer(firstSel, mr.bestAnswer, q)) {
+            this._answeredQuestions.add(key);
+            continue;
+          }
+        }
+        // 已有错误选择 → 跳过（不自动纠正，不锁住选项）
+        if (allSelected.length > 0 && !this._isSameAnswer(allSelected[0], mr.bestAnswer, q)) {
           this._answeredQuestions.add(key);
           continue;
         }
 
-        // 每题等待2-4秒再答
+        // 空白 → 自动选择
         await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
-
         try {
-          if (alreadySelected) {
-            // 先取消原错误选择
-            this._fireClick(alreadySelected);
-            await Helpers.sleep(Helpers.randomDelay(50, 150));
-          }
-          this._selectAnswers(q, mr.bestAnswer);
+          const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
+          await this._selectAnswers(q, mr.bestAnswer, bankOptions);
           this._answeredQuestions.add(key);
-          if (alreadySelected) this._correctedQuestions.add(key);
         } catch(e) { /* ignore */ }
       } else {
         this._answeredQuestions.add(key);
@@ -232,8 +235,10 @@ const ExamHelper = {
     if (inner) inner.click();
   },
 
-  /** 根据答案文本选中所有对应选项（单选点一个，多选点全部） */
-  async _selectAnswers(q, answer) {
+  /** 根据答案文本选中所有对应选项
+   *  @param {object} bankOptions - 题库中的选项文本 {A:"xx",B:"xx"}，用于文本匹配
+   */
+  async _selectAnswers(q, answer, bankOptions = null) {
     if (!answer || !q.inputElements) return 0;
     const answerLetters = answer.toUpperCase().split('').filter(ch => /[A-H]/.test(ch));
 
@@ -249,14 +254,35 @@ const ExamHelper = {
       return 0;
     }
 
-    // 单选答案 → 只点第一个匹配
+    // 有题库选项文本 → 用文本匹配（不受字母序号影响）
+    if (bankOptions && Object.keys(bankOptions).length > 0) {
+      let clicked = 0;
+      for (const letter of answerLetters) {
+        const bankText = TextNormalizer.normalize(bankOptions[letter] || '');
+        if (!bankText) continue;
+        for (const input of q.inputElements) {
+          const labelText = TextNormalizer.normalize(this._getInputLabel(input));
+          // 去掉 label 中的字母前缀（如 "A. "）再比较
+          const pureLabel = labelText.replace(/^[a-hA-H][.、) ]/, '').trim();
+          if (pureLabel.includes(bankText) || bankText.includes(pureLabel)) {
+            this._toggleOption(input);
+            clicked++;
+            break; // 每个字母只匹配一个 input
+          }
+        }
+      }
+      if (clicked > 0) return clicked;
+      // 文本匹配失败 → 继续走字母回退
+    }
+
+    // 单选 → 字母匹配回退
     if (answerLetters.length === 1) {
       const input = this._findInputByAnswer(q, answer);
       if (input) { this._toggleOption(input); return 1; }
       return 0;
     }
 
-    // 多选答案（如 "ABD"）→ 逐个点击所有字母对应的选项
+    // 多选 → 字母匹配回退
     let clicked = 0;
     for (const input of q.inputElements) {
       const labelText = this._getInputLabel(input);
@@ -271,7 +297,7 @@ const ExamHelper = {
     return clicked;
   },
 
-  /** 根据单个答案字母找到对应input（仅用于单选/判断检查） */
+  /** 根据单个答案字母找到对应 input（纯字母匹配，_selectAnswers 的兜底） */
   _findInputByAnswer(q, answer) {
     if (!answer || !q.inputElements) return q.inputElements[0];
     const letter = answer.toUpperCase()[0];
@@ -279,15 +305,6 @@ const ExamHelper = {
       const labelText = this._getInputLabel(input);
       if (labelText.startsWith(letter + '.') || labelText.startsWith(letter + '、') || labelText.startsWith(letter + ')') || labelText.startsWith(letter + ' ')) {
         return input;
-      }
-    }
-    // 回退：按选项文本匹配
-    const options = q.options || {};
-    const targetLabel = Object.entries(options).find(([k]) => k.toUpperCase() === answer.toUpperCase());
-    if (targetLabel) {
-      const targetText = TextNormalizer.normalize(targetLabel[1]);
-      for (const input of q.inputElements) {
-        if (TextNormalizer.normalize(this._getInputLabel(input)).includes(targetText)) return input;
       }
     }
     return q.inputElements[0];
@@ -391,7 +408,7 @@ const ExamHelper = {
 
         const key = q.normalizedStem || q.stemText;
 
-        // 已答且当前选中仍是正确答案 → 跳过；被手动改错 → 往下走纠错
+        // 已答且当前选中仍是正确答案 → 跳过
         if (mr.canAutoAnswer) {
           const alreadySelected = this._getSelectedInput(q);
           if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
@@ -399,27 +416,21 @@ const ExamHelper = {
             return;
           }
 
-          try {
-            const allSelected = this._getAllSelectedInputs(q);
-            const hasWrongAnswer = allSelected.length > 0;
+          // 已有选择但不正确 → 只显示结果，不自动清空（让用户自主决定）
+          const allSelected = this._getAllSelectedInputs(q);
+          if (allSelected.length > 0) return;
 
-            if (hasWrongAnswer) {
-              await Helpers.sleep(Helpers.randomDelay(80, 200));
-              // 清空全部已选项（多选时不能只清第一个，否则 toggle 会反向操作）
-              for (const input of allSelected) {
-                input.checked = false;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                const w = input.closest('.el-radio, .el-checkbox');
-                if (w) w.classList.remove('is-checked');
-              }
-              await Helpers.sleep(Helpers.randomDelay(50, 150));
-            } else {
-              await Helpers.sleep(Helpers.randomDelay(100, 300));
+          // 完全空白 → 自动选择（无论题库能不能匹配到，不锁住选项）
+          try {
+            await Helpers.sleep(Helpers.randomDelay(100, 300));
+            // 传递题库选项文本用于文本匹配（不受选项序号影响）
+            const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
+            const clicked = await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+            if (clicked > 0) {
+              this._answeredQuestions.add(key);
+              FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
             }
-            await this._selectAnswers(q, mr.bestAnswer);
-            this._answeredQuestions.add(key);
-            if (hasWrongAnswer) this._correctedQuestions.add(key);
-            FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
+            // 选不中也绝不锁住——用户依然可以手动点击
           } catch(e) { /* ignore */ }
         }
       });
