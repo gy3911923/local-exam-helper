@@ -338,7 +338,7 @@ const ExamHelper = {
   /** 判断已选答案是否与正确答案一致 */
   _isSameAnswer(selectedInput, correctAnswer, q) {
     const type = q.type || 'single';
-    if (type === 'judge' || (q.inputElements.length <= 2 && type === 'single')) {
+    if (type === 'judge') {
       const label = this._getInputLabel(selectedInput);
       const isCorrect = /^(对|正确|√|✓|是|yes|true)$/i.test(correctAnswer);
       const isSelectedCorrect = /^(对|正确|√|✓|是|yes|true)$/i.test(label);

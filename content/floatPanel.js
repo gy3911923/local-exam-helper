@@ -176,7 +176,7 @@ const FloatPanel = {
       }
       self._dragging = false;
       self._resizing = false;
-      if (self._panel) self._panel.releasePointerCapture(e.pointerId);
+      if (self._panel && e.pointerId !== undefined) self._panel.releasePointerCapture(e.pointerId);
     };
     document.addEventListener('mouseup', this._onMouseUp);
 
