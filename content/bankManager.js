@@ -7,13 +7,51 @@ const BankManager = {
 
   _panel: null,
   _banks: [],
+  _cssInjected: false,
 
   // 随机前缀——反检测，每次注入不同
   _px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
 
+  /** 动态注入随机前缀CSS（仅一次） */
+  _injectCSS() {
+    if (this._cssInjected) return;
+    const px = this._px;
+    const style = document.createElement('style');
+    style.textContent = `
+      #${px}_bank_mgr{display:none;position:fixed;inset:0;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#e8e8f0}
+      .${px}_bm_overlay{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+      .${px}_bm_dialog{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-width:90vw;max-height:80vh;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}
+      .${px}_bm_header{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #2a2a3e;gap:12px}
+      .${px}_bm_header h3{font-size:15px;margin:0;flex:1}
+      .${px}_bm_stats{font-size:11px;color:#64748b}
+      .${px}_bm_close{border:none;background:none;color:#fff;font-size:18px;cursor:pointer;padding:4px;line-height:1}
+      .${px}_bm_toolbar{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid #2a2a3e}
+      .${px}_btn_primary{padding:8px 16px;border-radius:8px;border:none;background:#1a73e8;color:#fff;font-size:13px;cursor:pointer;font-weight:500}
+      .${px}_btn_primary:active{opacity:.8}
+      .${px}_btn_secondary{padding:8px 16px;border-radius:8px;border:1px solid #2a2a3e;background:transparent;color:#e8e8f0;font-size:13px;cursor:pointer}
+      .${px}_btn_secondary:active{background:rgba(255,255,255,.05)}
+      .${px}_bm_list{flex:1;overflow-y:auto;padding:8px 16px}
+      .${px}_bm_empty{text-align:center;padding:40px 0;color:#64748b;font-size:13px}
+      .${px}_bm_item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:default}
+      .${px}_bm_item:last-child{border-bottom:none}
+      .${px}_bm_check{flex-shrink:0}
+      .${px}_bm_check input{cursor:pointer}
+      .${px}_bm_info{flex:1;min-width:0}
+      .${px}_bm_name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .${px}_bm_meta{font-size:11px;color:#64748b;margin-top:2px}
+      .${px}_bm_priority{font-size:11px;color:#1a73e8;font-weight:600;background:rgba(26,115,232,.1);padding:2px 8px;border-radius:10px}
+      .${px}_bm_delete{border:none;background:none;cursor:pointer;font-size:16px;padding:2px;opacity:.5}
+      .${px}_bm_delete:hover{opacity:1}
+      .${px}_bm_footer{padding:10px 16px;border-top:1px solid #2a2a3e;text-align:right}
+    `;
+    document.head.appendChild(style);
+    this._cssInjected = true;
+  },
+
   /** 创建管理面板DOM */
   create() {
     if (this._panel) return;
+    this._injectCSS();
     const px = this._px;
     const panel = document.createElement('div');
     panel.id = `${px}_bank_mgr`;
