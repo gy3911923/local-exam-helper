@@ -265,13 +265,15 @@ const ExamHelper = {
       let clicked = 0;
       const usedInputs = new Set(); // 防止一个 input 匹配多个字母
 
-      // 第一轮：精确匹配（去字母前缀后完全相等）
+      // 第一轮：精确匹配（先去掉字母前缀，再归一化比对）
       for (const letter of answerLetters) {
         const bankText = TextNormalizer.normalize(bankOptions[letter] || '');
         if (!bankText) continue;
         for (const input of q.inputElements) {
           if (usedInputs.has(input)) continue;
-          const pureLabel = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
+          // 先去字母前缀（用原始文本，normalize 前做）
+          const rawLabel = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
+          const pureLabel = TextNormalizer.normalize(rawLabel);
           if (pureLabel === bankText) {
             this._toggleOption(input);
             usedInputs.add(input);
@@ -286,10 +288,13 @@ const ExamHelper = {
       for (const letter of answerLetters) {
         if (!bankOptions[letter]) continue;
         const bankText = TextNormalizer.normalize(bankOptions[letter]);
+        if (bankText.length < 1) continue;
         for (const input of q.inputElements) {
           if (usedInputs.has(input)) continue;
-          const pureLabel = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
-          if (pureLabel.includes(bankText) && bankText.length > 1) { // >1 防止 "是"/"否" 误匹配
+          // 先去字母前缀，再归一化
+          const rawLabel = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
+          const pureLabel = TextNormalizer.normalize(rawLabel);
+          if (pureLabel.includes(bankText)) { // >1 防止 "是"/"否" 误匹配
             this._toggleOption(input);
             usedInputs.add(input);
             clicked++;
