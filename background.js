@@ -105,38 +105,58 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
 
     // ② 诊断数据：从 content script 收集
+    // 即使收集失败也保存一个最小诊断（URL+时间戳），确保始终有记录
     try {
-      const debugResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureDebug' });
-      if (debugResponse) {
-        const debugJson = JSON.stringify(debugResponse, null, 2);
-        const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
-        const debugUrl = await _blobToDataUrl(debugBlob);
-        await chrome.downloads.download({
-          url: debugUrl,
-          filename: baseFilename + '_debug.json',
-          saveAs: false
-        });
-        savedFiles.push('_debug.json');
-      } else {
-        errors.push('诊断: 收集为空');
+      let debugData = null;
+      try {
+        debugData = await chrome.tabs.sendMessage(tabId, { action: 'captureDebug' });
+      } catch (e) { /* sendMessage 可能超时 */ }
+
+      // 兜底：如果收集失败，生成最小诊断
+      if (!debugData || Object.keys(debugData).length === 0) {
+        debugData = {
+          url: '[unknown]',
+          title: '[unknown]',
+          timestamp: new Date().toISOString(),
+          _note: 'captureDebug 未返回数据，可能是 content script 未加载或 file:// 协议限制',
+          scripts: { inline: [], external: {} },
+          eventListeners: null,
+          storage: { localStorage: {}, sessionStorage: {} },
+          globalNames: [],
+          meta: { userAgent: navigator?.userAgent || 'unknown' }
+        };
+        errors.push('诊断: 收集为空，已保存最小诊断');
       }
+
+      const debugJson = JSON.stringify(debugData, null, 2);
+      const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
+      const debugUrl = await _blobToDataUrl(debugBlob);
+      await chrome.downloads.download({
+        url: debugUrl,
+        filename: baseFilename + '_debug.json',
+        saveAs: false
+      });
+      savedFiles.push('_debug.json');
     } catch (e) {
-      errors.push('诊断: ' + e.message);
+      errors.push('诊断保存失败: ' + (e.message || '未知错误'));
     }
 
-    // 通知页面
-    const saved = savedFiles.length > 0;
-    const msg = saved
-      ? `💾 ${savedFiles.map(f => baseFilename + f).join('\n')}`
-      : `❌ 保存失败: ${errors.join('; ')}`;
+    // 通知页面 — 始终显示完整结果
+    const savedList = savedFiles.length > 0
+      ? '✅ ' + savedFiles.map(f => baseFilename + f).join('\n✅ ')
+      : '';
+    const failedList = errors.length > 0
+      ? '\n⚠️ ' + errors.join('\n⚠️ ')
+      : '';
+    const msg = savedList + failedList;
     try {
       await chrome.tabs.sendMessage(tabId, {
         action: 'savePageDone',
-        success: saved,
-        files: saved ? savedFiles : [],
+        success: savedFiles.length > 0,
+        files: savedFiles.map(f => ({ name: baseFilename + f })),
         baseFilename,
         filename: msg,
-        error: saved ? undefined : errors.join('; ')
+        error: savedFiles.length === 0 ? errors.join('; ') : undefined
       });
     } catch (e) { /* ignore */ }
     return;

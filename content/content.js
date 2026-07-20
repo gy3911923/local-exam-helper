@@ -43,21 +43,14 @@ const ExamHelper = {
         BankManager.show();
       }
       if (msg.action === 'savePageDone') {
-        if (msg.success && this._mode === 'normal') {
-          const filesList = (msg.files || []).map(f => '  ' + msg.baseFilename + f).join('\n');
-          FloatPanel.showToast(
-            '💾 已保存到「下载」目录\n\n' +
-            filesList +
-            '\n\n⚠ 考前务必把 chrome://settings/downloads\n     位置改为「桌面」，否则找不到文件！',
-            8000  // 8秒显示
-          );
-        } else if (!msg.success && this._mode === 'normal') {
-          FloatPanel.showToast('❌ 保存失败: ' + (msg.error || '未知错误'), 5000);
+        if (this._mode === 'normal') {
+          const lines = (msg.filename || '').replace(/✅ /g, '💾 ').replace(/⚠️ /g, '⚠  ');
+          const duration = msg.success ? 8000 : 5000;
+          FloatPanel.showToast(lines + '\n\n⚠ 考前务必把 chrome://settings/downloads\n     位置改为「桌面」，否则找不到文件！', duration);
         }
       }
       if (msg.action === 'captureDebug') {
-        this._captureDebug().then(data => sendResponse(data));
-        return true; // 异步
+        sendResponse(this._captureDebug());
       }
       if (msg.action === 'captureHtml') {
         sendResponse({ html: document.documentElement.outerHTML });
@@ -466,8 +459,9 @@ const ExamHelper = {
     chrome.storage.local.set({ autoMode: mode });
   },
 
-  /** 收集诊断数据：JS源码 + 事件监听 + 存储 + 环境（Ctrl+Shift+S 触发） */
-  async _captureDebug() {
+  /** 收集诊断数据（同步方法，分模块独立容错） */
+  _captureDebug() {
+    // 基础数据：即使后续全部失败也返回
     const data = {
       url: location.href,
       title: document.title,
@@ -480,91 +474,87 @@ const ExamHelper = {
       meta: {}
     };
 
-    // ① 收集所有 script 标签内容
+    try { data.scripts = this._captureAllScripts(); } catch(e) { data._scriptError = e.message; }
+    try { data.eventListeners = this._captureEventListeners(); } catch(e) { data._eventError = e.message; }
+    try { data.storage = this._captureStorage(); } catch(e) { data._storageError = e.message; }
+    try { data.globalNames = this._captureGlobalNames(); } catch(e) { data._globalError = e.message; }
+    try { data.meta = this._captureMeta(data.scripts); } catch(e) { data._metaError = e.message; }
+
+    return data;
+  },
+
+  /** 同步收集 script 源码（不含 fetch 外部脚本——避免阻塞/超时） */
+  _captureAllScripts() {
+    const result = { inline: [], externalUrls: [] };
     const scripts = document.querySelectorAll('script');
     for (const s of scripts) {
       if (s.src) {
-        // 外部脚本 → fetch 获取源码
-        try {
-          const resp = await fetch(s.src, { credentials: 'include' });
-          if (resp.ok) {
-            data.scripts.external[s.src] = await resp.text();
-          } else {
-            data.scripts.external[s.src] = `[HTTP ${resp.status}]`;
-          }
-        } catch(e) {
-          data.scripts.external[s.src] = `[ERROR: ${e.message}]`;
-        }
+        result.externalUrls.push(s.src);
       } else if (s.textContent) {
-        data.scripts.inline.push(s.textContent);
+        result.inline.push(s.textContent);
       }
     }
+    return result;
+  },
 
-    // ② 事件监听记录（由 debugCapture.js 在 document_start 收集）
-    try {
-      if (window.___LEH_DEBUG___) {
-        data.eventListeners = window.___LEH_DEBUG___.getListeners();
-        data.dom0Events = window.___LEH_DEBUG___.getDOM0Events();
-      }
-    } catch(e) { /* ignore */ }
+  _captureEventListeners() {
+    if (window.___LEH_DEBUG___) {
+      return {
+        listeners: window.___LEH_DEBUG___.getListeners(),
+        dom0Events: window.___LEH_DEBUG___.getDOM0Events()
+      };
+    }
+    return null;
+  },
 
-    // ③ 存储
+  _captureStorage() {
+    const storage = { localStorage: {}, sessionStorage: {} };
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        data.storage.localStorage[k] = localStorage.getItem(k);
+        if (k) storage.localStorage[k] = localStorage.getItem(k);
       }
-    } catch(e) { /* ignore */ }
+    } catch(_) {}
     try {
       for (let i = 0; i < sessionStorage.length; i++) {
         const k = sessionStorage.key(i);
-        data.storage.sessionStorage[k] = sessionStorage.getItem(k);
+        if (k) storage.sessionStorage[k] = sessionStorage.getItem(k);
       }
-    } catch(e) { /* ignore */ }
+    } catch(_) {}
+    return storage;
+  },
 
-    // ④ 全局对象名（排除浏览器内置属性）
-    const builtins = new Set(Object.getOwnPropertyNames(window).filter(k => {
-      try { return typeof window[k] === 'undefined' || window[k] === null; } catch(_) { return true; }
-    }));
+  _captureGlobalNames() {
+    const names = [];
+    const skip = new Set(['___LEH_DEBUG___', 'FloatPanel', 'ExamHelper',
+      'Matcher', 'QuestionFinder', 'BankManager', 'TextNormalizer', 'Helpers', 'DB']);
     try {
-      const customKeys = [];
       for (const k of Object.getOwnPropertyNames(window)) {
-        if (builtins.has(k)) continue;
+        if (skip.has(k) || k.startsWith('webkit') || k.startsWith('on')) continue;
         try {
-          const v = window[k];
-          const t = typeof v;
-          // 过滤明显是浏览器内置的
-          if (k.startsWith('webkit') || k.startsWith('on')) continue;
-          if (k === '___LEH_DEBUG___' || k === 'FloatPanel' || k === 'ExamHelper' ||
-              k === 'Matcher' || k === 'QuestionFinder' || k === 'BankManager' ||
-              k === 'TextNormalizer' || k === 'Helpers' || k === 'DB') continue;
-          if (t === 'function' || t === 'object') {
-            try {
-              const keys = t === 'object' && v ? Object.keys(v).slice(0, 5).join(',') : '';
-              customKeys.push(`${k} (${t}${keys ? ', keys: ' + keys : ''})`);
-            } catch(_) { customKeys.push(`${k} (${t})`); }
+          const t = typeof window[k];
+          if (t === 'function' || (t === 'object' && window[k] !== null)) {
+            names.push(k + ' (' + t + ')');
           }
-        } catch(_) { /* ignore */ }
+        } catch(_) {}
       }
-      data.globalNames = customKeys.slice(0, 50); // 最多50个
-    } catch(e) { /* ignore */ }
+    } catch(_) {}
+    return names.slice(0, 50);
+  },
 
-    // ⑤ 环境元数据
-    data.meta = {
+  _captureMeta(scripts) {
+    return {
       userAgent: navigator.userAgent,
       webdriver: navigator.webdriver || false,
       platform: navigator.platform,
       screenSize: `${screen.width}x${screen.height}`,
       viewportSize: `${window.innerWidth}x${window.innerHeight}`,
       documentReadyState: document.readyState,
-      cookieCount: document.cookie.split(';').length,
+      cookieCount: document.cookie.split(';').filter(c => c.trim()).length,
       iframeCount: document.querySelectorAll('iframe').length,
-      scriptCount: scripts.length,
-      externalScriptCount: Object.keys(data.scripts.external).length,
-      inlineScriptCount: data.scripts.inline.length
+      scriptCount: (scripts.inline.length + scripts.externalUrls.length),
+      externalScriptCount: scripts.externalUrls.length
     };
-
-    return data;
   }
 };
 
