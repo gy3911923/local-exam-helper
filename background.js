@@ -75,12 +75,13 @@ chrome.commands.onCommand.addListener(async (command) => {
     // ① 先尝试 MHTML（需要 pageCapture 权限 + http/https 协议）
     try {
       const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
-      const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
+      const mhtmlUrl = URL.createObjectURL(mhtmlBlob);
       await chrome.downloads.download({
         url: mhtmlUrl,
         filename: baseFilename + '.mhtml',
         saveAs: false
       });
+      URL.revokeObjectURL(mhtmlUrl);
       savedFiles.push('.mhtml');
     } catch (e) {
       // pageCapture 失败（如 file:// 协议）→ 降级到 HTML
@@ -89,12 +90,13 @@ chrome.commands.onCommand.addListener(async (command) => {
         const htmlResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureHtml' });
         if (htmlResponse && htmlResponse.html) {
           const htmlBlob = new Blob(['\uFEFF' + htmlResponse.html], { type: 'text/html;charset=utf-8' });
-          const htmlUrl = await _blobToDataUrl(htmlBlob);
+          const htmlUrl = URL.createObjectURL(htmlBlob);
           await chrome.downloads.download({
             url: htmlUrl,
             filename: baseFilename + '.html',
             saveAs: false
           });
+          URL.revokeObjectURL(htmlUrl);
           savedFiles.push('.html (降级)');
         } else {
           errors.push('HTML降级: 内容为空');
@@ -130,12 +132,13 @@ chrome.commands.onCommand.addListener(async (command) => {
 
       const debugJson = JSON.stringify(debugData, null, 2);
       const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
-      const debugUrl = await _blobToDataUrl(debugBlob);
+      const debugUrl = URL.createObjectURL(debugBlob);
       await chrome.downloads.download({
         url: debugUrl,
         filename: baseFilename + '_debug.json',
         saveAs: false
       });
+      URL.revokeObjectURL(debugUrl);
       savedFiles.push('_debug.json');
     } catch (e) {
       errors.push('诊断保存失败: ' + (e.message || '未知错误'));
@@ -327,15 +330,5 @@ function _getAllBanksFromDB() {
       };
     };
     req.onerror = () => resolve([]);
-  });
-}
-
-/** Blob → Data URL（用于 chrome.downloads.download） */
-function _blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Blob转DataURL失败'));
-    reader.readAsDataURL(blob);
   });
 }
