@@ -8,34 +8,38 @@ const BankManager = {
   _panel: null,
   _banks: [],
 
+  // 随机前缀——反检测，每次注入不同
+  _px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+
   /** 创建管理面板DOM */
   create() {
     if (this._panel) return;
+    const px = this._px;
     const panel = document.createElement('div');
-    panel.id = '__leh_bank_mgr__';
+    panel.id = `${px}_bank_mgr`;
     panel.innerHTML = `
-      <div class="__leh_bm_overlay__" id="__leh_bm_overlay__"></div>
-      <div class="__leh_bm_dialog__">
-        <div class="__leh_bm_header__">
+      <div class="${px}_bm_overlay" id="${px}_bm_overlay"></div>
+      <div class="${px}_bm_dialog">
+        <div class="${px}_bm_header">
           <h3>📚 题库管理</h3>
-          <div class="__leh_bm_stats__">
-            <span id="__leh_bm_total__">0 题库 · 0 题</span>
+          <div class="${px}_bm_stats">
+            <span id="${px}_bm_total">0 题库 · 0 题</span>
           </div>
-          <button class="__leh_bm_close__" id="__leh_bm_close__">✕</button>
+          <button class="${px}_bm_close" id="${px}_bm_close">✕</button>
         </div>
 
-        <div class="__leh_bm_toolbar__">
-          <button class="__leh_btn_primary__" id="__leh_bm_import__">📥 导入题库</button>
-          <button class="__leh_btn_secondary__" id="__leh_bm_template__">📋 下载模板</button>
-          <input type="file" id="__leh_bm_file_input__" accept=".xlsx,.xls,.json" multiple style="display:none">
+        <div class="${px}_bm_toolbar">
+          <button class="${px}_btn_primary" id="${px}_bm_import">📥 导入题库</button>
+          <button class="${px}_btn_secondary" id="${px}_bm_template">📋 下载模板</button>
+          <input type="file" id="${px}_bm_file_input" accept=".xlsx,.xls,.json" multiple style="display:none">
         </div>
 
-        <div class="__leh_bm_list__" id="__leh_bm_list__">
-          <div class="__leh_bm_empty__">暂无题库，点击「导入题库」添加</div>
+        <div class="${px}_bm_list" id="${px}_bm_list">
+          <div class="${px}_bm_empty">暂无题库，点击「导入题库」添加</div>
         </div>
 
-        <div class="__leh_bm_footer__">
-          <button class="__leh_btn_secondary__" id="__leh_bm_save__">💾 保存激活状态</button>
+        <div class="${px}_bm_footer">
+          <button class="${px}_btn_secondary" id="${px}_bm_save">💾 保存激活状态</button>
         </div>
       </div>
     `;
@@ -68,12 +72,13 @@ const BankManager = {
 
   /** 绑定事件 */
   _bindEvents() {
-    const close = document.getElementById('__leh_bm_close__');
-    const overlay = document.getElementById('__leh_bm_overlay__');
-    const importBtn = document.getElementById('__leh_bm_import__');
-    const fileInput = document.getElementById('__leh_bm_file_input__');
-    const templateBtn = document.getElementById('__leh_bm_template__');
-    const saveBtn = document.getElementById('__leh_bm_save__');
+    const px = this._px;
+    const close = document.getElementById(`${px}_bm_close`);
+    const overlay = document.getElementById(`${px}_bm_overlay`);
+    const importBtn = document.getElementById(`${px}_bm_import`);
+    const fileInput = document.getElementById(`${px}_bm_file_input`);
+    const templateBtn = document.getElementById(`${px}_bm_template`);
+    const saveBtn = document.getElementById(`${px}_bm_save`);
 
     close?.addEventListener('click', () => this.hide());
     overlay?.addEventListener('click', () => this.hide());
@@ -87,6 +92,7 @@ const BankManager = {
 
   /** 刷新题库列表 */
   async _refreshList() {
+    const px = this._px;
     try {
       const saved = await chrome.storage.local.get(['activeBanks']);
       const activeIds = new Set(saved.activeBanks || []);
@@ -96,29 +102,29 @@ const BankManager = {
       this._banks = banks;
 
       const total = banks.reduce((s, b) => s + (b.questionCount || 0), 0);
-      const stats = document.getElementById('__leh_bm_total__');
+      const stats = document.getElementById(`${px}_bm_total`);
       if (stats) stats.textContent = `${banks.length} 题库 · ${total} 题`;
 
-      const list = document.getElementById('__leh_bm_list__');
+      const list = document.getElementById(`${px}_bm_list`);
       if (!list) return;
 
       if (banks.length === 0) {
-        list.innerHTML = '<div class="__leh_bm_empty__">暂无题库，点击「导入题库」添加</div>';
+        list.innerHTML = `<div class="${px}_bm_empty">暂无题库，点击「导入题库」添加</div>`;
         return;
       }
 
       list.innerHTML = banks.map((bank, idx) => `
-        <div class="__leh_bm_item__" data-id="${bank.id}" draggable="true">
-          <label class="__leh_bm_check__">
+        <div class="${px}_bm_item" data-id="${bank.id}" draggable="true">
+          <label class="${px}_bm_check">
             <input type="checkbox" ${activeIds.has(bank.id) ? 'checked' : ''} 
                    onchange="BankManager._toggleActive('${bank.id}', this.checked)">
           </label>
-          <div class="__leh_bm_info__">
-            <div class="__leh_bm_name__">${this._esc(bank.name)}</div>
-            <div class="__leh_bm_meta__">${bank.questionCount || 0} 题 · ${bank.updatedAt ? bank.updatedAt.slice(0,10) : '—'}</div>
+          <div class="${px}_bm_info">
+            <div class="${px}_bm_name">${this._esc(bank.name)}</div>
+            <div class="${px}_bm_meta">${bank.questionCount || 0} 题 · ${bank.updatedAt ? bank.updatedAt.slice(0,10) : '—'}</div>
           </div>
-          <span class="__leh_bm_priority__">P${idx+1}</span>
-          <button class="__leh_bm_delete__" onclick="BankManager._deleteBank('${bank.id}')">🗑</button>
+          <span class="${px}_bm_priority">P${idx+1}</span>
+          <button class="${px}_bm_delete" onclick="BankManager._deleteBank('${bank.id}')">🗑</button>
         </div>
       `).join('');
 
@@ -141,7 +147,8 @@ const BankManager = {
 
   /** 保存激活状态 */
   async _saveActiveBanks() {
-    const checkboxes = document.querySelectorAll('#__leh_bm_list__ input[type="checkbox"]');
+    const px = this._px;
+    const checkboxes = document.querySelectorAll(`#${px}_bm_list input[type="checkbox"]`);
     const activeIds = [];
     checkboxes.forEach(cb => {
       if (cb.checked) {

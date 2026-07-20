@@ -91,7 +91,7 @@ const QuestionFinder = {
       stemText,
       normalizedStem: TextNormalizer.normalize(stemText),
       options,
-      type,
+      type: this.detectType(inputs),  // 自动检测 single/judge/multiple
       container,
       inputElements: inputs
     };
