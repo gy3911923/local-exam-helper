@@ -278,7 +278,7 @@ const QuestionFinder = {
         return '';
       });
       // 含"正确/错误/对/错/是/否"且选项≤3 → 判断题
-      const hasJudgeWords = labelTexts.some(t => /^(正确|错误|对|错|是|否|√|×|✓|✗|true|false|yes|no)$/i.test(t));
+      const hasJudgeWords = labelTexts.some(t => /(正确|错误|对|错|是|否|[√✓]|[×✗]|true|false|yes|no)/i.test(t));
       if (hasJudgeWords && inputElements.length <= 3) return this.TYPE.JUDGE;
       return this.TYPE.SINGLE;
     }
