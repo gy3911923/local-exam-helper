@@ -29,14 +29,14 @@ const FloatPanel = {
       .${px}_ok{color:#10b981;font-size:12px;padding:4px 8px;background:rgba(16,185,129,.1);border-radius:6px;margin-bottom:8px}
       .${px}_result{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
       .${px}_result:last-child{border-bottom:none}
-      .${px}_stem{font-size:11px;color:#8890a0;line-height:1.4;margin-bottom:4px}
+      .${px}_stem{font-size:11px;color:#8890a0;line-height:1.4;margin-bottom:4px;word-break:break-all}
       .${px}_answer_row{display:flex;align-items:center;justify-content:space-between}
       .${px}_answer{font-size:14px;font-weight:700}
       .${px}_score{font-size:11px;font-weight:600;padding:1px 6px;border-radius:8px}
-      .${px}_options{font-size:11px;color:#64748b;margin-top:2px}
+      .${px}_options{font-size:11px;color:#64748b;margin-top:2px;word-break:break-all}
       .${px}_opt_answer{color:#10b981;font-weight:600}
       .${px}_opt{color:#64748b}
-      .${px}_analysis{font-size:11px;color:#94a3b8;margin-top:2px;border-left:2px solid #334155;padding-left:6px}
+      .${px}_analysis{font-size:11px;color:#94a3b8;margin-top:2px;border-left:2px solid #334155;padding-left:6px;word-break:break-all}
       .${px}_resize{position:absolute;bottom:2px;right:2px;width:16px;height:16px;cursor:nwse-resize;pointer-events:auto;background:linear-gradient(135deg,transparent 50%,#334155 50%);border-radius:0 0 8px 0}
     `;
     document.head.appendChild(style);
@@ -258,7 +258,7 @@ const FloatPanel = {
     showResults.forEach((r, i) => {
       html += `
         <div class="${px}_result">
-          <div class="${px}_stem">${this._truncate(r.stemText, 80)}</div>
+          <div class="${px}_stem">${this._esc(r.stemText)}</div>
           <div class="${px}_answer_row">
             <span class="${px}_answer" style="color:${i===0 ? scoreColor : '#8890a0'}">
               ${i===0 ? '⭐' : '··'} 答案: ${this._formatAnswer(r.answer, r.options)}
