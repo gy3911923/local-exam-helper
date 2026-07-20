@@ -75,13 +75,12 @@ chrome.commands.onCommand.addListener(async (command) => {
     // ① 先尝试 MHTML（需要 pageCapture 权限 + http/https 协议）
     try {
       const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
-      const mhtmlUrl = URL.createObjectURL(mhtmlBlob);
+      const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
       await chrome.downloads.download({
         url: mhtmlUrl,
         filename: baseFilename + '.mhtml',
         saveAs: false
       });
-      URL.revokeObjectURL(mhtmlUrl);
       savedFiles.push('.mhtml');
     } catch (e) {
       // pageCapture 失败（如 file:// 协议）→ 降级到 HTML
@@ -90,13 +89,12 @@ chrome.commands.onCommand.addListener(async (command) => {
         const htmlResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureHtml' });
         if (htmlResponse && htmlResponse.html) {
           const htmlBlob = new Blob(['\uFEFF' + htmlResponse.html], { type: 'text/html;charset=utf-8' });
-          const htmlUrl = URL.createObjectURL(htmlBlob);
+          const htmlUrl = await _blobToDataUrl(htmlBlob);
           await chrome.downloads.download({
             url: htmlUrl,
             filename: baseFilename + '.html',
             saveAs: false
           });
-          URL.revokeObjectURL(htmlUrl);
           savedFiles.push('.html (降级)');
         } else {
           errors.push('HTML降级: 内容为空');
@@ -132,13 +130,12 @@ chrome.commands.onCommand.addListener(async (command) => {
 
       const debugJson = JSON.stringify(debugData, null, 2);
       const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
-      const debugUrl = URL.createObjectURL(debugBlob);
+      const debugUrl = await _blobToDataUrl(debugBlob);
       await chrome.downloads.download({
         url: debugUrl,
         filename: baseFilename + '_debug.json',
         saveAs: false
       });
-      URL.revokeObjectURL(debugUrl);
       savedFiles.push('_debug.json');
     } catch (e) {
       errors.push('诊断保存失败: ' + (e.message || '未知错误'));
@@ -331,4 +328,23 @@ function _getAllBanksFromDB() {
     };
     req.onerror = () => resolve([]);
   });
+}
+
+/**
+ * Blob → Data URL（Service Worker 兼容）
+ * 不能用 FileReader（Worker 线程不存在）
+ * 不能用 URL.createObjectURL（Edge Service Worker 兼容性差）
+ * 改用 arrayBuffer + btoa，所有 Worker 通用
+ *
+ * 注意：分块 0x8000 字节避免 String.fromCharCode 参数栈溢出
+ */
+async function _blobToDataUrl(blob) {
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`;
 }
