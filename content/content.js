@@ -245,6 +245,12 @@ const ExamHelper = {
     // 文本答案（"正确"/"错误"等）
     if (answerLetters.length === 0 && answer) {
       const target = TextNormalizer.normalize(answer);
+      // 精确匹配优先
+      for (const input of q.inputElements) {
+        const pure = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
+        if (pure === target) { this._toggleOption(input); return 1; }
+      }
+      // 包含匹配回退
       for (const input of q.inputElements) {
         if (TextNormalizer.normalize(this._getInputLabel(input)).includes(target)) {
           this._toggleOption(input);
@@ -257,17 +263,37 @@ const ExamHelper = {
     // 有题库选项文本 → 用文本匹配（不受字母序号影响）
     if (bankOptions && Object.keys(bankOptions).length > 0) {
       let clicked = 0;
+      const usedInputs = new Set(); // 防止一个 input 匹配多个字母
+
+      // 第一轮：精确匹配（去字母前缀后完全相等）
       for (const letter of answerLetters) {
         const bankText = TextNormalizer.normalize(bankOptions[letter] || '');
         if (!bankText) continue;
         for (const input of q.inputElements) {
-          const labelText = TextNormalizer.normalize(this._getInputLabel(input));
-          // 去掉 label 中的字母前缀（如 "A. "）再比较
-          const pureLabel = labelText.replace(/^[a-hA-H][.、) ]/, '').trim();
-          if (pureLabel.includes(bankText) || bankText.includes(pureLabel)) {
+          if (usedInputs.has(input)) continue;
+          const pureLabel = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
+          if (pureLabel === bankText) {
             this._toggleOption(input);
+            usedInputs.add(input);
             clicked++;
-            break; // 每个字母只匹配一个 input
+            break;
+          }
+        }
+      }
+      if (clicked === answerLetters.length) return clicked;
+
+      // 第二轮：包含匹配（补救不完全相等的文本）
+      for (const letter of answerLetters) {
+        if (!bankOptions[letter]) continue;
+        const bankText = TextNormalizer.normalize(bankOptions[letter]);
+        for (const input of q.inputElements) {
+          if (usedInputs.has(input)) continue;
+          const pureLabel = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
+          if (pureLabel.includes(bankText) && bankText.length > 1) { // >1 防止 "是"/"否" 误匹配
+            this._toggleOption(input);
+            usedInputs.add(input);
+            clicked++;
+            break;
           }
         }
       }
