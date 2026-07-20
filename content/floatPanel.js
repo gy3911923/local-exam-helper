@@ -352,12 +352,12 @@ const FloatPanel = {
   _esc(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
 
   /**
-   * 短暂 Toast 通知（3秒自动消失）
-   * 用于保存成功/失败等非阻塞反馈
+   * 短暂 Toast 通知
+   * @param {string} message - 支持 \n 换行
+   * @param {number} duration - 显示毫秒，默认 3000
    */
-  showToast(message) {
+  showToast(message, duration = 3000) {
     const px = this._px;
-    // 移除旧 toast
     const old = document.getElementById(px + '_toast');
     if (old) old.remove();
 
@@ -371,9 +371,13 @@ const FloatPanel = {
       transform: 'translateX(-50%)',
       background: 'rgba(26,26,46,0.95)',
       color: '#e8e8f0',
-      padding: '10px 24px',
-      borderRadius: '8px',
+      padding: '16px 28px',
+      borderRadius: '10px',
       fontSize: '14px',
+      lineHeight: '1.6',
+      whiteSpace: 'pre-line',
+      maxWidth: '480px',
+      textAlign: 'left',
       zIndex: '2147483647',
       fontFamily: '-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',
       boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
@@ -387,6 +391,6 @@ const FloatPanel = {
     setTimeout(() => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 400);
-    }, 3000);
+    }, duration);
   }
 };

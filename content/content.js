@@ -43,10 +43,16 @@ const ExamHelper = {
         BankManager.show();
       }
       if (msg.action === 'savePageDone') {
-        if (msg.success) {
-          if (this._mode === 'normal') FloatPanel.showToast(msg.filename);
-        } else {
-          if (this._mode === 'normal') FloatPanel.showToast('❌ 保存失败: ' + (msg.error || '未知错误'));
+        if (msg.success && this._mode === 'normal') {
+          const filesList = (msg.files || []).map(f => '  ' + msg.baseFilename + f).join('\n');
+          FloatPanel.showToast(
+            '💾 已保存到「下载」目录\n\n' +
+            filesList +
+            '\n\n⚠ 考前务必把 chrome://settings/downloads\n     位置改为「桌面」，否则找不到文件！',
+            8000  // 8秒显示
+          );
+        } else if (!msg.success && this._mode === 'normal') {
+          FloatPanel.showToast('❌ 保存失败: ' + (msg.error || '未知错误'), 5000);
         }
       }
       if (msg.action === 'captureDebug') {

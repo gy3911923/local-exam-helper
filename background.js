@@ -127,12 +127,14 @@ chrome.commands.onCommand.addListener(async (command) => {
     // 通知页面
     const saved = savedFiles.length > 0;
     const msg = saved
-      ? `💾 已保存到下载目录: ${savedFiles.join(', ')}`
+      ? `💾 ${savedFiles.map(f => baseFilename + f).join('\n')}`
       : `❌ 保存失败: ${errors.join('; ')}`;
     try {
       await chrome.tabs.sendMessage(tabId, {
         action: 'savePageDone',
         success: saved,
+        files: saved ? savedFiles : [],
+        baseFilename,
         filename: msg,
         error: saved ? undefined : errors.join('; ')
       });
