@@ -167,20 +167,36 @@ const QuestionFinder = {
 
   /** 提取题干文本（去除所有选项label后剩余的文本） */
   _extractStemText(container, inputs) {
-    // Element UI 特殊处理：inputs 在 .selectAnswer 内，题干在上方
+    // Element UI 特殊处理：inputs 在 .selectAnswer 内，题干在上方 header
     const selectAnswer = inputs[0].closest('.selectAnswer');
     if (selectAnswer) {
-      let prev = selectAnswer.previousElementSibling;
-      const texts = [];
-      while (prev) {
-        const t = (prev.textContent || '').replace(/\s+/g, ' ').trim();
-        // 跳过纯分数标记如 "(1.0分)" "(2分)" 等
-        if (t && !/^\(\d+(\.\d+)?分\)$/.test(t) && t.length >= 2) {
-          texts.unshift(t);
+      // 优先从 .headerContent 提取，只取实际题干 span
+      const header = selectAnswer.previousElementSibling;
+      if (header) {
+        const headerContent = header.querySelector('.headerContent');
+        if (headerContent) {
+          const spans = headerContent.querySelectorAll('span');
+          const texts = [];
+          for (const span of spans) {
+            const t = (span.textContent || '').trim();
+            // 跳过题型标签 "(单选)" "(多选)" "(判断)" 和分数 "(1.0分)"
+            if (!t) continue;
+            if (/^\(\s*(单|多|判|选|简|填).*\)$/i.test(t)) continue;
+            if (/^\(\d+(\.\d+)?分\)$/.test(t)) continue;
+            if (/^\d+(\.\d+)?分$/.test(t)) continue;
+            texts.push(t);
+          }
+          if (texts.length > 0) return texts.join(' ');
         }
-        prev = prev.previousElementSibling;
+        // 回退：取 header 纯文本，但剥离题号和类型
+        const rawText = (header.textContent || '').replace(/\s+/g, ' ').trim();
+        // 去掉题号前缀 "1 " 和题型标签 "(单选)" 和分数 "(1.0分)"
+        const cleaned = rawText.replace(/^\d+\s*/, '')
+                              .replace(/\(\s*(单|多|判)选\s*\)/g, '')
+                              .replace(/\(\d+(\.\d+)?分\)/g, '')
+                              .trim();
+        if (cleaned) return cleaned;
       }
-      if (texts.length > 0) return texts.join(' ');
     }
     return this._getStemTextFromNode(container);
   },

@@ -45,7 +45,7 @@ async function refreshUI() {
       (config.activeBanks || []).length + ' 个';
 
     document.getElementById('infoThreshold').textContent =
-      Math.round((config.matchThreshold || 0.7) * 100) + '%';
+      Math.round((config.matchThreshold || 0.6) * 100) + '%';
   } catch(e) {
     console.error(e);
   }

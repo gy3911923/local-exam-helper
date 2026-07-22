@@ -19,6 +19,7 @@ const ExamHelper = {
   _initialized: false,
   _answeredQuestions: new Set(), // 已作答的题目stem文本哈希，避免重复作答
   _correctedQuestions: new Set(), // 已纠错的题目，避免重复计数
+  _hoverBound: false, // 防止 MutationObserver 重绑事件
 
   /** 初始化 */
   async init() {
@@ -190,13 +191,13 @@ const ExamHelper = {
 
     // 不为全部题目作答——等待悬停触发逐题作答
 
-    // 仅普通模式显示悬浮窗
+    // 仅普通模式显示悬浮窗（首次绑定，后续只更新状态）
     if (this._mode === 'normal') {
       FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
-      if (this._matchResults.length > 0) {
-        FloatPanel.showResult(this._questions[0], this._matchResults[0]);
+      if (!this._hoverBound) {
+        this._bindHoverEvents();
+        this._hoverBound = true;
       }
-      this._bindHoverEvents();
     }
   },
 
@@ -513,7 +514,7 @@ const ExamHelper = {
   async _getThreshold() {
     try {
       const config = await chrome.storage.local.get(['matchThreshold']);
-      return config.matchThreshold || 0.7;
+      return config.matchThreshold || 0.6;
     } catch(e) {
       return 0.7;
     }
