@@ -40,20 +40,25 @@ const QuestionFinder = {
 
     if (radioInputs.length === 0 && checkboxInputs.length === 0) return [];
 
-    // 按name分组radio
-    const radioGroups = this._groupByName(radioInputs);
-    const checkboxGroups = this._groupByName(checkboxInputs);
+    // 检测：有 name 属性 → 按 name 分组；否则按 el-radio-group / el-checkbox-group 分组
+    const hasNames = radioInputs.some(inp => inp.getAttribute('name'));
+    const radioGroups = hasNames
+      ? this._groupByName(radioInputs)
+      : this._groupByElWrapper(radioInputs, '.el-radio-group');
+    const checkboxGroups = hasNames
+      ? this._groupByName(checkboxInputs)
+      : this._groupByElWrapper(checkboxInputs, '.el-checkbox-group');
 
     const questions = [];
 
     // 处理单选组
-    for (const [name, inputs] of Object.entries(radioGroups)) {
+    for (const [key, inputs] of Object.entries(radioGroups)) {
       const q = this._extractQuestion(inputs, 'single');
       if (q) questions.push(q);
     }
 
     // 处理多选组
-    for (const [name, inputs] of Object.entries(checkboxGroups)) {
+    for (const [key, inputs] of Object.entries(checkboxGroups)) {
       const q = this._extractQuestion(inputs, 'multiple');
       if (q) questions.push(q);
     }
@@ -69,6 +74,19 @@ const QuestionFinder = {
       const name = input.getAttribute('name') || input.id || '';
       if (!groups[name]) groups[name] = [];
       groups[name].push(input);
+    }
+    return groups;
+  },
+
+  /** 按 Element UI 容器分组（el-radio-group / el-checkbox-group） */
+  _groupByElWrapper(inputs, selector) {
+    const groups = {};
+    let idx = 0;
+    for (const input of inputs) {
+      const wrapper = input.closest(selector);
+      const key = wrapper ? '_el_wrap_' + (idx++) : '_orphan_' + Math.random();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(input);
     }
     return groups;
   },
@@ -149,6 +167,18 @@ const QuestionFinder = {
 
   /** 提取题干文本（去除所有选项label后剩余的文本） */
   _extractStemText(container, inputs) {
+    // Element UI 特殊处理：inputs 在 .selectAnswer 内，题干在上方
+    const selectAnswer = inputs[0].closest('.selectAnswer');
+    if (selectAnswer) {
+      let prev = selectAnswer.previousElementSibling;
+      const texts = [];
+      while (prev) {
+        const t = (prev.textContent || '').replace(/\s+/g, ' ').trim();
+        if (t && t.length >= 2) texts.unshift(t);
+        prev = prev.previousElementSibling;
+      }
+      if (texts.length > 0) return texts.join(' ');  // 可能跨多个 span
+    }
     return this._getStemTextFromNode(container);
   },
 
