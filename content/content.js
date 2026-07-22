@@ -425,8 +425,11 @@ const ExamHelper = {
       if (!mr.question.container && !mr.question.inputElements) continue;
       const q = mr.question;
 
-      // Element UI: 题目和选项是兄弟节点，用 .selectAnswer 作为 hover 目标
-      const hoverTarget = (q.inputElements.length > 0 && q.inputElements[0].closest('.selectAnswer'))
+      // Element UI: 用 .selectAnswer 的父容器（即 .test.bm-exam-test 整题卡片）
+      // → 鼠标进入题干 OR 选项都能触发
+      const selectAnswer = q.inputElements.length > 0 && q.inputElements[0].closest('.selectAnswer');
+      const hoverTarget = (selectAnswer && selectAnswer.parentElement)  // 整题卡片
+        || (q.inputElements.length > 0 && q.inputElements[0].closest('.el-radio-group')?.parentElement)
         || q.container;
       if (!hoverTarget) continue;
 
