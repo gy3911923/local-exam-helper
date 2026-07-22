@@ -193,7 +193,6 @@ const QuestionFinder = {
       }
       if (texts.length > 0) return texts.join(' ');
     }
-    }
     return this._getStemTextFromNode(container);
   },
 
