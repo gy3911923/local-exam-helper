@@ -320,19 +320,13 @@ const FloatPanel = {
 
   _formatAnswer(answer, options) {
     if (!answer) return '无';
-    if (!options || Object.keys(options).length === 0) return this._esc(answer);
 
     // 判断答案：正确/错误 → 返回原文
     if (/^(正确|错误|对|错)$/.test(answer)) return this._esc(answer);
 
-    // 字母答案：展开为 "D. 防火安全措施"
+    // 字母答案：只显示字母（不重复选项文本，下面 _formatOptions 已显示）
     const letters = answer.toUpperCase().split('').filter(ch => /[A-H]/.test(ch));
-    if (letters.length > 0) {
-      return letters.map(k => {
-        const text = options[k] || '';
-        return text ? `${k}. ${text}` : k;
-      }).join(' · ');
-    }
+    if (letters.length > 0) return letters.join(' · ');
 
     return this._esc(answer);
   },
