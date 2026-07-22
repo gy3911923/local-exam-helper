@@ -246,9 +246,10 @@ const ExamHelper = {
     // 文本答案（"正确"/"错误"等）
     if (answerLetters.length === 0 && answer) {
       const target = TextNormalizer.normalize(answer);
-      // 精确匹配优先
+      // 精确匹配优先（先去字母前缀，再归一化）
       for (const input of q.inputElements) {
-        const pure = TextNormalizer.normalize(this._getInputLabel(input)).replace(/^[a-hA-H][.、) ]/, '').trim();
+        const raw = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
+        const pure = TextNormalizer.normalize(raw);
         if (pure === target) { this._toggleOption(input); return 1; }
       }
       // 包含匹配回退
