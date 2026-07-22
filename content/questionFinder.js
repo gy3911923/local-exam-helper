@@ -167,36 +167,32 @@ const QuestionFinder = {
 
   /** 提取题干文本（去除所有选项label后剩余的文本） */
   _extractStemText(container, inputs) {
-    // Element UI 特殊处理：inputs 在 .selectAnswer 内，题干在上方 header
+    // Element UI 特殊处理：inputs 在 .selectAnswer 内，题干在上方
     const selectAnswer = inputs[0].closest('.selectAnswer');
     if (selectAnswer) {
-      // 优先从 .headerContent 提取，只取实际题干 span
-      const header = selectAnswer.previousElementSibling;
-      if (header) {
-        const headerContent = header.querySelector('.headerContent');
+      let prev = selectAnswer.previousElementSibling;
+      const texts = [];
+      while (prev) {
+        // 优先从 .headerContent 提取实际题干 span（过滤类型/分数标签）
+        const headerContent = prev.querySelector('.headerContent');
         if (headerContent) {
           const spans = headerContent.querySelectorAll('span');
-          const texts = [];
           for (const span of spans) {
             const t = (span.textContent || '').trim();
-            // 跳过题型标签 "(单选)" "(多选)" "(判断)" 和分数 "(1.0分)"
             if (!t) continue;
             if (/^\(\s*(单|多|判|选|简|填).*\)$/i.test(t)) continue;
             if (/^\(\d+(\.\d+)?分\)$/.test(t)) continue;
             if (/^\d+(\.\d+)?分$/.test(t)) continue;
-            texts.push(t);
+            texts.unshift(t);
           }
-          if (texts.length > 0) return texts.join(' ');
+        } else {
+          const t = (prev.textContent || '').replace(/\s+/g, ' ').trim();
+          if (t && t.length >= 2) texts.unshift(t);
         }
-        // 回退：取 header 纯文本，但剥离题号和类型
-        const rawText = (header.textContent || '').replace(/\s+/g, ' ').trim();
-        // 去掉题号前缀 "1 " 和题型标签 "(单选)" 和分数 "(1.0分)"
-        const cleaned = rawText.replace(/^\d+\s*/, '')
-                              .replace(/\(\s*(单|多|判)选\s*\)/g, '')
-                              .replace(/\(\d+(\.\d+)?分\)/g, '')
-                              .trim();
-        if (cleaned) return cleaned;
+        prev = prev.previousElementSibling;
       }
+      if (texts.length > 0) return texts.join(' ');
+    }
     }
     return this._getStemTextFromNode(container);
   },
