@@ -174,10 +174,13 @@ const QuestionFinder = {
       const texts = [];
       while (prev) {
         const t = (prev.textContent || '').replace(/\s+/g, ' ').trim();
-        if (t && t.length >= 2) texts.unshift(t);
+        // 跳过纯分数标记如 "(1.0分)" "(2分)" 等
+        if (t && !/^\(\d+(\.\d+)?分\)$/.test(t) && t.length >= 2) {
+          texts.unshift(t);
+        }
         prev = prev.previousElementSibling;
       }
-      if (texts.length > 0) return texts.join(' ');  // 可能跨多个 span
+      if (texts.length > 0) return texts.join(' ');
     }
     return this._getStemTextFromNode(container);
   },

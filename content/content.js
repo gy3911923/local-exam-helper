@@ -421,17 +421,20 @@ const ExamHelper = {
   /** 绑定题目hover事件：鼠标移到哪题就答哪题（300ms延迟防误触） */
   _bindHoverEvents() {
     for (const mr of this._matchResults) {
-      if (!mr.question.container) continue;
-      const container = mr.question.container;
+      if (!mr.question.container && !mr.question.inputElements) continue;
+      const q = mr.question;
 
-      container.addEventListener('mouseenter', async () => {
+      // Element UI: 题目和选项是兄弟节点，用 .selectAnswer 作为 hover 目标
+      const hoverTarget = (q.inputElements.length > 0 && q.inputElements[0].closest('.selectAnswer'))
+        || q.container;
+      if (!hoverTarget) continue;
+
+      hoverTarget.addEventListener('mouseenter', async () => {
         if (this._mode !== 'normal') return;
 
         // 立即显示匹配结果
         FloatPanel.showResult(mr.question, mr);
 
-        // 悬停触发逐题作答（已答过/低置信度/冲突 → 跳过）
-        const q = mr.question;
         if (!q.inputElements || q.inputElements.length === 0) return;
 
         // 延迟300ms防快速滚屏误触
