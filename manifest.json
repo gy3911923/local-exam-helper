@@ -1,4 +1,5 @@
 {
+  "manifest_version": 3,
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwbvhZL0L2OmJhL8K0WlZxCXo2CWqPFPemViMxEjK7hfx7GYpmH5PnDmZPteCqE2kQpFkbHNG3nBvKc2FpqUqkMhFQdYdGfPqLZxZmS7MpKjRg3VxRk5TkLmZbQpN3LdGJcZw2BXxYV5S8aHwTjPfKqLcZbNxQmWrBfVk7MpRj2VnDy5ZhJxQzGk6MdKp3SwLcXwZmBf7RxK8VjNzPnQyTjLmMjZkRqTkPnYfJ2VkGqPcN3RhXmW5ZkLdSbNx6KcL7Zm8Y9QpBfMkHbRjVxLcMnJwQo2Zn3ZkKxPfKq5Yj8RwLmNcZxVkSpPfMjHdDwIDAQAB",
   "name": "页面辅助工具",
   "version": "1.9.6",
