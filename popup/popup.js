@@ -52,20 +52,11 @@ async function refreshUI() {
 }
 
 function openBankManager() {
-  // 直接调到当前标签的内容脚本,显示页面内模态题库管理
-  // 不再打开 bank-manager.html(已废弃,ID 缓存会导致加载失败)
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    if (!tab) return;
-    chrome.tabs.sendMessage(tab.id, { action: 'showBankManager' }, () => {
-      // content script 可能未注入(如空白页),忽略错误
-      void chrome.runtime.lastError;
-      window.close();
-    });
-  });
+  // 打开独立题库管理页面——必须与考试页面隔离
+  // 导入/导出/全选/清空等操作不应依赖考试页面的 content script
+  chrome.tabs.create({ url: chrome.runtime.getURL('bank-manager.html') });
 }
 
 function openSettings() {
-  // 简化为显示状态信息(没有独立设置页)
-  alert('设置项请在考试页面通过浮窗或本 popup 调整匹配阈值');
+  chrome.tabs.create({ url: chrome.runtime.getURL('bank-manager.html') });
 }

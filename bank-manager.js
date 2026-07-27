@@ -45,6 +45,8 @@ document.getElementById('btnTemplate').addEventListener('click', downloadTemplat
 document.getElementById('btnExport').addEventListener('click', exportAllBanks);
 document.getElementById('btnRestore').addEventListener('click', () => document.getElementById('restoreInput').click());
 document.getElementById('restoreInput').addEventListener('change', restoreAllBanks);
+document.getElementById('btnSelectAll')?.addEventListener('click', selectAll);
+document.getElementById('btnDeleteAll')?.addEventListener('click', deleteAll);
 $fileInput.addEventListener('change', handleImport);
 
 async function loadBanks() {
@@ -339,6 +341,31 @@ async function restoreAllBanks(e) {
     e.target.value = '';
     toast('恢复失败: ' + (err.message || '未知错误'), 'error');
   }
+}
+}
+
+async function selectAll() {
+  const allActive = banks.length > 0 && banks.every(b => activeIds.has(b.id));
+  if (allActive) {
+    activeIds.clear();
+  } else {
+    banks.forEach(b => activeIds.add(b.id));
+  }
+  await chrome.storage.local.set({ activeBanks: [...activeIds] });
+  renderList();
+}
+
+async function deleteAll() {
+  if (banks.length === 0) return;
+  if (!confirm(`确定要删除全部 ${banks.length} 个题库吗？此操作不可恢复。`)) return;
+  const result = prompt('请输入 DELETE 确认清空：');
+  if (result !== 'DELETE') return;
+  for (const b of banks) {
+    await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: b.id });
+  }
+  await chrome.storage.local.set({ activeBanks: [] });
+  activeIds.clear();
+  await loadBanks();
 }
 
 loadBanks();
