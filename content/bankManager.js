@@ -30,6 +30,8 @@ const BankManager = {
       .${px}_btn_primary:active{opacity:.8}
       .${px}_btn_secondary{padding:8px 16px;border-radius:8px;border:1px solid #2a2a3e;background:transparent;color:#e8e8f0;font-size:13px;cursor:pointer}
       .${px}_btn_secondary:active{background:rgba(255,255,255,.05)}
+      .${px}_btn_danger{padding:8px 16px;border-radius:8px;border:1px solid #4a1a1a;background:transparent;color:#ef4444;font-size:13px;cursor:pointer}
+      .${px}_btn_danger:hover{border-color:#ef4444;background:rgba(239,68,68,.08)}
       .${px}_bm_list{flex:1;overflow-y:auto;padding:8px 16px}
       .${px}_bm_empty{text-align:center;padding:40px 0;color:#64748b;font-size:13px}
       .${px}_bm_item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:default}
@@ -69,6 +71,8 @@ const BankManager = {
         <div class="${px}_bm_toolbar">
           <button class="${px}_btn_primary" id="${px}_bm_import">📥 导入题库</button>
           <button class="${px}_btn_secondary" id="${px}_bm_template">📋 下载模板</button>
+          <button class="${px}_btn_secondary" id="${px}_bm_selectAll">☑ 全选</button>
+          <button class="${px}_btn_danger" id="${px}_bm_deleteAll">🗑 清空</button>
           <input type="file" id="${px}_bm_file_input" accept=".xlsx,.xls,.json" multiple style="display:none">
         </div>
 
@@ -126,6 +130,12 @@ const BankManager = {
 
     templateBtn?.addEventListener('click', () => this._downloadTemplate());
     saveBtn?.addEventListener('click', () => this._saveActiveBanks());
+
+    const selectAllBtn = document.getElementById(`${px}_bm_selectAll`);
+    selectAllBtn?.addEventListener('click', () => this._selectAll());
+
+    const deleteAllBtn = document.getElementById(`${px}_bm_deleteAll`);
+    deleteAllBtn?.addEventListener('click', () => this._deleteAll());
   },
 
   /** 刷新题库列表 */
@@ -418,6 +428,40 @@ const BankManager = {
         resolve();
       });
     });
+  },
+
+  /** 全选/取消全选题库 */
+  async _selectAll() {
+    const saved = await chrome.storage.local.get(['activeBanks']);
+    const activeIds = saved.activeBanks || [];
+    const currentIds = this._banks.map(b => b.id);
+    const allActive = currentIds.every(id => activeIds.includes(id));
+
+    if (allActive) {
+      // 全取消
+      const newIds = activeIds.filter(id => !currentIds.includes(id));
+      await chrome.storage.local.set({ activeBanks: newIds });
+    } else {
+      // 全选中
+      const newIds = [...new Set([...activeIds, ...currentIds])];
+      await chrome.storage.local.set({ activeBanks: newIds });
+    }
+    await this._refreshList();
+  },
+
+  /** 清空全部题库(双重确认) */
+  async _deleteAll() {
+    if (this._banks.length === 0) return;
+    const firstConfirm = confirm(`确定要删除全部 ${this._banks.length} 个题库吗？此操作不可恢复。`);
+    if (!firstConfirm) return;
+    const secondConfirm = prompt('请输入 DELETE 确认清空：');
+    if (secondConfirm !== 'DELETE') return;
+
+    for (const bank of this._banks) {
+      await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: bank.id });
+    }
+    await chrome.storage.local.set({ activeBanks: [] });
+    await this._refreshList();
   },
 
   /** 删除题库 */
