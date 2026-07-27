@@ -226,8 +226,8 @@ const QuestionFinder = {
         const label = Helpers.safeQuery(`label[for="${input.id}"]`, container);
         if (label) {
           const lb = label.cloneNode(true);
-          // 去除 iconfont 图标字符（苏电e学堂用 iconfont 显示勾选状态）
-          lb.querySelectorAll('.iconfont, [class*="iconfont"]').forEach(el => el.remove());
+          // 去除 iconfont + 混淆隐藏标签（display:none/opacity:0/font-size:0/visibility:hidden）
+          lb.querySelectorAll('.iconfont, [class*="iconfont"], [style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]').forEach(el => el.remove());
           optionText = (lb.textContent || '').trim();
         }
       }

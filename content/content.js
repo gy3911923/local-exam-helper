@@ -343,23 +343,22 @@ const ExamHelper = {
     return q.inputElements[0];
   },
   _getInputLabel(input) {
-    // 方式1：label[for]（先去掉 iconfont 元素防止图标字符污染）
+    // 方式1：label[for]（去除 iconfont + 混淆隐藏标签）
     if (input.id) {
       const label = Helpers.safeQuery(`label[for="${input.id}"]`);
       if (label) {
         const lb = label.cloneNode(true);
-        lb.querySelectorAll('.iconfont, [class*="iconfont"]').forEach(el => el.remove());
+        lb.querySelectorAll('.iconfont, [class*="iconfont"], [style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]').forEach(el => el.remove());
         return (lb.textContent || '').trim();
       }
     }
-    // 方式2：往上找外层容器（.el-radio / .el-checkbox / 最近的 <label>）
+    // 方式2：往上找外层容器
     const wrapper = input.closest('.el-radio, .el-checkbox, label');
     if (wrapper) {
       const clone = wrapper.cloneNode(true);
       const inp = clone.querySelector('input');
       if (inp) inp.remove();
-      // 去除 iconfont 图标
-      clone.querySelectorAll('.iconfont, [class*="iconfont"]').forEach(el => el.remove());
+      clone.querySelectorAll('.iconfont, [class*="iconfont"], [style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]').forEach(el => el.remove());
       return (clone.textContent || '').replace(/\s+/g, ' ').trim();
     }
     // 方式3：父元素文本
@@ -368,7 +367,7 @@ const ExamHelper = {
       const clone = parent.cloneNode(true);
       const inp = clone.querySelector('input');
       if (inp) inp.remove();
-      clone.querySelectorAll('.iconfont, [class*="iconfont"]').forEach(el => el.remove());
+      clone.querySelectorAll('.iconfont, [class*="iconfont"], [style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]').forEach(el => el.remove());
       return (clone.textContent || '').replace(/\s+/g, ' ').trim();
     }
     return '';
