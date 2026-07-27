@@ -157,8 +157,11 @@ const QuestionFinder = {
   /** 从节点提取题干文本（去除所有选项label后剩余的文本） */
   _getStemTextFromNode(node) {
     const clone = node.cloneNode(true);
-    // 去除 anti-cheat 隐藏干扰（苏电e学堂在题目前插入 display:none 随机数字）
-    const hidden = clone.querySelectorAll('[style*="display:none"], [style*="display: none"]');
+    // 去除 anti-cheat 隐藏干扰（苏电e学堂注入隐藏标签)
+    //   display:none / opacity:0 / font-size:0 / visibility:hidden
+    const hidden = clone.querySelectorAll(
+      '[style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]'
+    );
     hidden.forEach(el => el.remove());
     // 去除选项label
     const labels = clone.querySelectorAll('label');
