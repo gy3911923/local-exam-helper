@@ -443,9 +443,11 @@ const ExamHelper = {
       hoverTarget.addEventListener('mouseenter', async () => {
         if (this._mode !== 'normal') return;
 
-        // 关键: 不使用闭包里的旧 mr, 从 this._matchResults 实时查
-        // 否则导入题库后 v1.10.3 的重扫更新了 _matchResults, 但 hover 闭包仍是旧对象
-        const cur = this._matchResults.find(m => m.question === q) || mr;
+        // 关键: 重扫后 question 对象是新的,=== 失效。用第一个 input 元素引用定位
+        // DOM 元素不会变,无论扫描多少次都是同一个 <input>
+        const cur = (q.inputElements.length && this._matchResults.find(m =>
+          m.question.inputElements.length && m.question.inputElements[0] === q.inputElements[0]
+        )) || mr;
         FloatPanel.showResult(q, cur);
 
         if (!q.inputElements || q.inputElements.length === 0) return;
