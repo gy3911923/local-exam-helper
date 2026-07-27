@@ -493,9 +493,12 @@ const BankManager = {
 
   /** 从background获取题库 */
   async _getBanks() {
-    // content script中通过chrome.runtime获取background IndexedDB数据
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({ action: 'getAllBanks' }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
         resolve(response || []);
       });
     });
