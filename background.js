@@ -224,19 +224,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === 'getAllBanks') {
-    _getAllBanksFromDB().then(banks => sendResponse(banks));
+    _getAllBanksFromDB()
+      .then(banks => sendResponse(banks))
+      .catch(error => sendResponse({ error: error.message || '题库读取失败' }));
     return true;
   }
 
   if (msg.action === 'getActiveBankData') {
     const bankIds = msg.bankIds || [];
     const priorities = msg.priorities || {};
-    _getAllBanksFromDB().then(allBanks => {
-      const active = allBanks
-        .filter(b => bankIds.includes(b.id))
-        .map(b => ({ ...b, priority: priorities[b.id] || 0 }));
-      sendResponse(active);
-    });
+    _getAllBanksFromDB()
+      .then(allBanks => {
+        const active = allBanks
+          .filter(b => bankIds.includes(b.id))
+          .map(b => ({ ...b, priority: priorities[b.id] || 0 }));
+        sendResponse(active);
+      })
+      .catch(() => sendResponse([]));
     return true;
   }
 
@@ -251,12 +255,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === 'saveBank') {
-    _saveBankToDB(msg.bank).then(result => sendResponse(result));
+    _saveBankToDB(msg.bank)
+      .then(result => sendResponse(result))
+      .catch(() => sendResponse(null));
     return true;
   }
 
   if (msg.action === 'deleteBank') {
-    _deleteBankFromDB(msg.bankId).then(() => sendResponse({ success: true }));
+    _deleteBankFromDB(msg.bankId)
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error.message || '删除失败' }));
     return true;
   }
 });
@@ -268,65 +276,110 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 /** 保存题库到IndexedDB */
 function _saveBankToDB(bank) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let db;
     const req = indexedDB.open('ExamBanks', 1);
     req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('banks')) {
-        db.createObjectStore('banks', { keyPath: 'id' });
+      const upgradeDb = e.target.result;
+      if (!upgradeDb.objectStoreNames.contains('banks')) {
+        upgradeDb.createObjectStore('banks', { keyPath: 'id' });
       }
     };
+    req.onerror = () => reject(req.error || new Error('无法打开题库数据库'));
     req.onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('banks', 'readwrite');
-      const store = tx.objectStore('banks');
-      store.put({ ...bank, updatedAt: new Date().toISOString() });
-      tx.oncomplete = () => { db.close(); resolve(bank); };
-      tx.onerror = () => { db.close(); resolve(null); };
+      db = e.target.result;
+      try {
+        const tx = db.transaction('banks', 'readwrite');
+        const record = { ...bank, updatedAt: new Date().toISOString() };
+        tx.objectStore('banks').put(record);
+        tx.oncomplete = () => {
+          db.close();
+          resolve(record);
+        };
+        tx.onerror = () => {
+          const error = tx.error || new Error('题库写入失败');
+          db.close();
+          reject(error);
+        };
+        tx.onabort = () => {
+          const error = tx.error || new Error('题库写入已取消');
+          db.close();
+          reject(error);
+        };
+      } catch (error) {
+        db.close();
+        reject(error);
+      }
     };
-    req.onerror = () => resolve(null);
   });
 }
 
 /** 从IndexedDB删除题库 */
 function _deleteBankFromDB(bankId) {
-  return new Promise((resolve) => {
-    const req = indexedDB.open('ExamBanks', 1);
-    req.onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('banks', 'readwrite');
-      const store = tx.objectStore('banks');
-      store.delete(bankId);
-      tx.oncomplete = () => { db.close(); resolve(); };
-    };
-    req.onerror = () => resolve();
-  });
-}
-/** 从IndexedDB获取所有题库 */
-function _getAllBanksFromDB() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let db;
     const req = indexedDB.open('ExamBanks', 1);
     req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('banks')) {
-        db.createObjectStore('banks', { keyPath: 'id' });
+      const upgradeDb = e.target.result;
+      if (!upgradeDb.objectStoreNames.contains('banks')) {
+        upgradeDb.createObjectStore('banks', { keyPath: 'id' });
       }
     };
+    req.onerror = () => reject(req.error || new Error('无法打开题库数据库'));
     req.onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('banks', 'readonly');
-      const store = tx.objectStore('banks');
-      const getAll = store.getAll();
-      getAll.onsuccess = () => {
-        resolve(getAll.result || []);
+      db = e.target.result;
+      try {
+        const tx = db.transaction('banks', 'readwrite');
+        tx.objectStore('banks').delete(bankId);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => {
+          const error = tx.error || new Error('题库删除失败');
+          db.close();
+          reject(error);
+        };
+        tx.onabort = () => {
+          const error = tx.error || new Error('题库删除已取消');
+          db.close();
+          reject(error);
+        };
+      } catch (error) {
         db.close();
-      };
-      getAll.onerror = () => {
-        resolve([]);
-        db.close();
-      };
+        reject(error);
+      }
     };
-    req.onerror = () => resolve([]);
+  });
+}
+
+/** 从IndexedDB获取所有题库 */
+function _getAllBanksFromDB() {
+  return new Promise((resolve, reject) => {
+    let db;
+    const req = indexedDB.open('ExamBanks', 1);
+    req.onupgradeneeded = (e) => {
+      const upgradeDb = e.target.result;
+      if (!upgradeDb.objectStoreNames.contains('banks')) {
+        upgradeDb.createObjectStore('banks', { keyPath: 'id' });
+      }
+    };
+    req.onerror = () => reject(req.error || new Error('无法打开题库数据库'));
+    req.onsuccess = (e) => {
+      db = e.target.result;
+      try {
+        const tx = db.transaction('banks', 'readonly');
+        const getAll = tx.objectStore('banks').getAll();
+        getAll.onsuccess = () => resolve(getAll.result || []);
+        getAll.onerror = () => reject(getAll.error || new Error('题库读取失败'));
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => reject(tx.error || new Error('题库读取失败'));
+        tx.onabort = () => reject(tx.error || new Error('题库读取已取消'));
+      } catch (error) {
+        db.close();
+        reject(error);
+      }
+    };
   });
 }
 

@@ -38,32 +38,60 @@ function toast(msg, type='success') {
   toastTimer = setTimeout(() => t.remove(), 4000);
 }
 
-document.getElementById('btnImport').addEventListener('click', () => $fileInput.click());
-document.getElementById('btnRefresh').addEventListener('click', loadBanks);
-document.getElementById('btnSave').addEventListener('click', saveAndClose);
-document.getElementById('btnTemplate').addEventListener('click', downloadTemplate);
-document.getElementById('btnExport').addEventListener('click', exportAllBanks);
-document.getElementById('btnRestore').addEventListener('click', () => document.getElementById('restoreInput').click());
-document.getElementById('restoreInput').addEventListener('change', restoreAllBanks);
-document.getElementById('btnSelectAll')?.addEventListener('click', selectAll);
-document.getElementById('btnDeleteAll')?.addEventListener('click', deleteAll);
-$fileInput.addEventListener('change', handleImport);
+function bind(id, event, handler) {
+  const element = document.getElementById(id);
+  if (element) element.addEventListener(event, handler);
+  return element;
+}
+
+bind('btnImport', 'click', () => $fileInput?.click());
+bind('btnSave', 'click', saveAndClose);
+bind('btnTemplate', 'click', downloadTemplate);
+bind('btnExport', 'click', exportAllBanks);
+bind('btnSelectAll', 'click', selectAll);
+bind('btnDeleteAll', 'click', deleteAll);
+$fileInput?.addEventListener('change', handleImport);
+
+function setLoading(message = '正在加载题库...') {
+  $stats.textContent = message;
+  $list.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><p>正在加载题库...</p><p style="font-size:12px;margin-top:4px">请稍候</p></div>';
+}
+
+function setLoadError(error) {
+  const message = error?.message || String(error || '未知错误');
+  $stats.textContent = '加载失败';
+  $list.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><p>题库加载失败</p><p style="font-size:12px;margin-top:4px;word-break:break-word">${esc(message)}</p><button class="btn btn-primary" id="btnRetry" style="margin-top:12px">重试</button></div>`;
+  bind('btnRetry', 'click', loadBanks);
+}
 
 async function loadBanks() {
   if (!isAlive()) { showDead(); return; }
+  setLoading();
   try {
-    banks = await chrome.runtime.sendMessage({ action: 'getAllBanks' }) || [];
+    const response = await chrome.runtime.sendMessage({ action: 'getAllBanks' });
+    if (!Array.isArray(response)) throw new Error('后台返回的题库数据格式无效');
+    banks = response;
     const config = await chrome.storage.local.get(['activeBanks']);
-    activeIds = new Set(config.activeBanks || []);
+    activeIds = new Set(Array.isArray(config.activeBanks) ? config.activeBanks : []);
     renderList();
   } catch(e) {
-    $stats.textContent = '加载失败: ' + e.message;
+    console.error('加载题库失败:', e);
+    setLoadError(e);
   }
 }
 
 function renderList() {
   const total = banks.reduce((s, b) => s + (b.questionCount || 0), 0);
   $stats.textContent = `${banks.length} 题库 · ${total} 题`;
+
+  const selectAllBtn = document.getElementById('btnSelectAll');
+  if (selectAllBtn) {
+    const allActive = banks.length > 0 && banks.every(bank => activeIds.has(bank.id));
+    selectAllBtn.textContent = allActive ? '取消全选' : '全选';
+    selectAllBtn.disabled = banks.length === 0;
+  }
+  const deleteAllBtn = document.getElementById('btnDeleteAll');
+  if (deleteAllBtn) deleteAllBtn.disabled = banks.length === 0;
 
   if (banks.length === 0) {
     $list.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>暂无题库</p><p style="font-size:12px;margin-top:4px">点击「导入题库」添加 Excel 或 JSON 文件</p></div>';
@@ -83,84 +111,184 @@ function renderList() {
   `).join('');
 
   $list.querySelectorAll('.bank-check').forEach(cb => {
-    cb.addEventListener('change', () => {
+    cb.addEventListener('change', async () => {
       if (cb.checked) activeIds.add(cb.dataset.id);
       else activeIds.delete(cb.dataset.id);
-      chrome.storage.local.set({ activeBanks: [...activeIds] });
+      try {
+        await chrome.storage.local.set({ activeBanks: [...activeIds] });
+        renderList();
+      } catch (e) {
+        toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
+      }
     });
   });
 
   $list.querySelectorAll('.bank-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('确定删除该题库？')) return;
-      await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: btn.dataset.id });
-      await loadBanks();
-      toast('已删除');
+      btn.disabled = true;
+      try {
+        const result = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: btn.dataset.id });
+        if (!result || result.success !== true) throw new Error('后台删除失败');
+        activeIds.delete(btn.dataset.id);
+        await chrome.storage.local.set({ activeBanks: [...activeIds] });
+        await loadBanks();
+        toast('已删除');
+      } catch (e) {
+        btn.disabled = false;
+        toast('删除失败: ' + (e.message || '未知错误'), 'error');
+      }
     });
   });
 }
 
 async function saveAndClose() {
-  const checked = [...$list.querySelectorAll('.bank-check:checked')].map(cb => cb.dataset.id);
-  await chrome.storage.local.set({ activeBanks: checked });
-  window.close();
+  try {
+    const checked = [...$list.querySelectorAll('.bank-check:checked')].map(cb => cb.dataset.id);
+    await chrome.storage.local.set({ activeBanks: checked });
+    window.close();
+  } catch (e) {
+    toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
+  }
 }
 
 async function handleImport(e) {
   if (!isAlive()) { showDead(); return; }
-  const files = e.target.files;
-  if (!files.length) return;
+  const files = Array.from(e.target.files || []);
+  if (files.length === 0) return;
 
-  let success = 0, failed = 0, totalQ = 0;
+  const importBtn = document.getElementById('btnImport');
+  importBtn?.setAttribute('disabled', 'disabled');
+
+  let success = 0;
+  let failed = 0;
+  let totalQ = 0;
+  let duplicates = 0;
   const errors = [];
 
-  for (const file of files) {
-    try {
-      const data = await parseFile(file);
-      if (!data || data.length === 0) { failed++; errors.push(file.name + ': 解析结果为空'); continue; }
+  try {
+    for (const file of files) {
+      try {
+        const parsed = await parseFile(file);
+        const candidates = parsed.kind === 'backup'
+          ? parsed.banks.map((bank, index) => ({
+              name: bank.name || `${file.name.replace(/\.json$/i, '')}-${index + 1}`,
+              questions: bank.questions
+            }))
+          : [{
+              name: file.name.replace(/\.(xlsx|xls|json)$/i, ''),
+              questions: parsed.questions
+            }];
 
-      data.forEach(q => { q.normalizedQ = TextNormalizer.normalize(q.question || ''); });
-      const unique = deduplicate(data);
+        if (candidates.length === 0) {
+          throw new Error('文件中没有可导入的题库');
+        }
 
-      const bank = {
-        id: Helpers.uid(),
-        name: file.name.replace(/\.(xlsx|xls|json)$/i, ''),
-        questions: unique,
-        questionCount: unique.length,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        for (const candidate of candidates) {
+          const prepared = prepareQuestions(candidate.questions);
+          if (prepared.length === 0) {
+            throw new Error('解析结果为空，或题目缺少题干字段');
+          }
 
-      const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
-      if (result) { success++; totalQ += unique.length; }
-      else { failed++; errors.push(file.name + ': 保存失败'); }
-    } catch(err) {
-      failed++;
-      errors.push(file.name + ': ' + (err.message || '未知错误'));
-      console.error(err);
+          const unique = deduplicate(prepared);
+          duplicates += prepared.length - unique.length;
+          const bank = createBank(candidate.name, unique);
+          const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
+          if (!result || !result.id) throw new Error('后台保存失败');
+
+          activeIds.add(bank.id);
+          success++;
+          totalQ += unique.length;
+        }
+      } catch (err) {
+        failed++;
+        errors.push(`${file.name}: ${err.message || '未知错误'}`);
+        console.error('导入失败:', file.name, err);
+      }
     }
+
+    // 导入成功的题库默认激活；失败文件不会污染激活列表
+    if (success > 0) {
+      await chrome.storage.local.set({ activeBanks: [...activeIds] });
+    }
+    await loadBanks();
+  } catch (err) {
+    failed += 1;
+    errors.push(err.message || '导入流程失败');
+    console.error('导入流程失败:', err);
+  } finally {
+    e.target.value = '';
+    importBtn?.removeAttribute('disabled');
   }
 
-  $fileInput.value = '';
-  await loadBanks();
+  const messages = [];
+  if (success > 0) messages.push(`成功入库 ${success} 个题库（${totalQ} 题）`);
+  if (duplicates > 0) messages.push(`已去重 ${duplicates} 题`);
+  if (failed > 0) messages.push(`${failed} 个文件导入失败`);
+  if (errors.length > 0) messages.push(...errors);
+  toast(messages.join('；') || '没有可导入的数据', failed > 0 ? 'error' : 'success');
+}
 
-  const msgs = [];
-  if (success > 0) msgs.push(`✅ 成功入库 ${success} 个题库（${totalQ} 题）`);
-  if (failed > 0) msgs.push(`❌ ${failed} 个失败`);
-  if (errors.length > 0) msgs.push(...errors.map(e => '  ' + e));
-  toast(msgs.join('\n'), failed > 0 ? 'error' : 'success');
+function createBank(name, questions) {
+  const now = new Date().toISOString();
+  return {
+    id: Helpers.uid(),
+    name: String(name || '未命名题库').trim() || '未命名题库',
+    questions,
+    questionCount: questions.length,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function prepareQuestions(rawQuestions) {
+  if (!Array.isArray(rawQuestions)) return [];
+  return rawQuestions.map(item => {
+    if (!item || typeof item !== 'object') return null;
+    const question = String(item.question ?? item.stem ?? item.stemText ?? '').trim();
+    if (!question) return null;
+    const options = normalizeOptions(item.options);
+    return {
+      ...item,
+      type: String(item.type || 'single'),
+      question,
+      options,
+      answer: String(item.answer ?? '').trim(),
+      analysis: String(item.analysis ?? ''),
+      normalizedQ: TextNormalizer.normalize(question)
+    };
+  }).filter(Boolean);
+}
+
+function normalizeOptions(rawOptions) {
+  if (Array.isArray(rawOptions)) {
+    return rawOptions.reduce((result, value, index) => {
+      const letter = String.fromCharCode(65 + index);
+      result[letter] = String(value ?? '').trim();
+      return result;
+    }, {});
+  }
+  if (!rawOptions || typeof rawOptions !== 'object') return {};
+  return Object.fromEntries(Object.entries(rawOptions).map(([key, value]) => [
+    String(key).trim().toUpperCase(), String(value ?? '').trim()
+  ]));
 }
 
 async function parseFile(file) {
-  if (file.name.endsWith('.json')) {
+  const name = String(file.name || '').toLowerCase();
+  if (name.endsWith('.json')) {
     const text = await file.text();
     const json = JSON.parse(text);
-    return Array.isArray(json) ? json : (json.questions || json.data || []);
+    if (Array.isArray(json.banks)) {
+      return { kind: 'backup', banks: json.banks };
+    }
+    if (Array.isArray(json)) return { kind: 'questions', questions: json };
+    return { kind: 'questions', questions: json.questions || json.data || [] };
   }
-  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-    return parseExcel(file);
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    return { kind: 'questions', questions: await parseExcel(file) };
   }
-  throw new Error('不支持的文件格式，请使用 .xlsx / .xls / .json');
+  throw new Error('不支持的文件格式，请使用 .xlsx、.xls 或 .json');
 }
 
 async function parseExcel(file) {
@@ -284,75 +412,63 @@ function downloadTemplate() {
   XLSX.writeFile(wb, '题库模板.xlsx');
 }
 
-function esc(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-// ===== 导出/恢复全部题库 =====
+// ===== 导出全部题库 =====
 async function exportAllBanks() {
   if (!isAlive()) { showDead(); return; }
-  const banks = await chrome.runtime.sendMessage({ action: 'getAllBanks' }) || [];
-  if (banks.length === 0) { toast('当前无题库可导出', 'error'); return; }
-
-  const exportData = {
-    version: '1.0',
-    exportedAt: new Date().toISOString(),
-    banks: banks.map(b => ({ name: b.name, questions: b.questions, questionCount: b.questionCount }))
-  };
-
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `题库备份_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast(`✅ 已导出 ${banks.length} 个题库（${exportData.banks.reduce((s,b) => s+b.questionCount, 0)} 题）`);
-}
-
-async function restoreAllBanks(e) {
-  if (!isAlive()) { showDead(); return; }
-  const file = e.target.files[0];
-  if (!file) return;
-
   try {
-    const text = await file.text();
-    const data = JSON.parse(text);
-    if (!data.banks || !Array.isArray(data.banks)) throw new Error('无效的备份文件');
-
-    let success = 0, totalQ = 0;
-    for (const b of data.banks) {
-      // 归一化题干
-      b.questions.forEach(q => { q.normalizedQ = TextNormalizer.normalize(q.question || ''); });
-      const bank = {
-        id: Helpers.uid(),
-        name: b.name,
-        questions: b.questions,
-        questionCount: b.questionCount || b.questions.length,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
-      if (result) { success++; totalQ += bank.questionCount; }
+    const allBanks = await chrome.runtime.sendMessage({ action: 'getAllBanks' });
+    if (!Array.isArray(allBanks)) throw new Error('后台返回的题库数据格式无效');
+    if (allBanks.length === 0) {
+      toast('当前无题库可导出', 'error');
+      return;
     }
 
-    e.target.value = '';
-    await loadBanks();
-    toast(`✅ 恢复成功：${success} 个题库（${totalQ} 题）`);
-  } catch(err) {
-    e.target.value = '';
-    toast('恢复失败: ' + (err.message || '未知错误'), 'error');
+    const exportData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      banks: allBanks.map(b => ({
+        name: b.name,
+        questions: b.questions,
+        questionCount: b.questionCount
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `题库备份_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast(`已导出 ${allBanks.length} 个题库（${exportData.banks.reduce((s,b) => s + (b.questionCount || 0), 0)} 题）`);
+  } catch (e) {
+    toast('导出失败: ' + (e.message || '未知错误'), 'error');
   }
-}
 }
 
 async function selectAll() {
-  const allActive = banks.length > 0 && banks.every(b => activeIds.has(b.id));
+  if (banks.length === 0) return;
+  const allActive = banks.every(b => activeIds.has(b.id));
   if (allActive) {
-    activeIds.clear();
+    banks.forEach(b => activeIds.delete(b.id));
   } else {
     banks.forEach(b => activeIds.add(b.id));
   }
-  await chrome.storage.local.set({ activeBanks: [...activeIds] });
-  renderList();
+  try {
+    await chrome.storage.local.set({ activeBanks: [...activeIds] });
+    renderList();
+  } catch (e) {
+    toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
+  }
 }
 
 async function deleteAll() {
@@ -360,12 +476,24 @@ async function deleteAll() {
   if (!confirm(`确定要删除全部 ${banks.length} 个题库吗？此操作不可恢复。`)) return;
   const result = prompt('请输入 DELETE 确认清空：');
   if (result !== 'DELETE') return;
-  for (const b of banks) {
-    await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: b.id });
+
+  const deleteBtn = document.getElementById('btnDeleteAll');
+  deleteBtn?.setAttribute('disabled', 'disabled');
+  try {
+    for (const bank of banks) {
+      const response = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: bank.id });
+      if (!response || response.success !== true) throw new Error(`删除「${bank.name}」失败`);
+    }
+    await chrome.storage.local.set({ activeBanks: [] });
+    activeIds.clear();
+    await loadBanks();
+    toast('已清空全部题库');
+  } catch (e) {
+    toast('清空失败: ' + (e.message || '未知错误'), 'error');
+    await loadBanks();
+  } finally {
+    deleteBtn?.removeAttribute('disabled');
   }
-  await chrome.storage.local.set({ activeBanks: [] });
-  activeIds.clear();
-  await loadBanks();
 }
 
 loadBanks();

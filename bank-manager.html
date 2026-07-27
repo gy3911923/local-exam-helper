@@ -20,6 +20,7 @@ body {
   display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { background: rgba(255,255,255,.08); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-primary { border-color: #1a73e8; color: #1a73e8; }
 .btn-primary:hover { background: rgba(26,115,232,.1); }
 .btn-danger { border-color: #dc2626; color: #dc2626; }
@@ -65,7 +66,7 @@ body {
 <div class="header">
   <div>
     <h1>📚 题库管理</h1>
-    <div class="stats" id="stats">加载中...</div>
+    <div class="stats" id="stats" aria-live="polite">正在加载题库...</div>
   </div>
 </div>
 
@@ -75,8 +76,6 @@ body {
   <button class="btn" id="btnSelectAll">☑ 全选</button>
   <button class="btn btn-danger" id="btnDeleteAll">🗑 清空</button>
   <input type="file" id="fileInput" accept=".xlsx,.xls,.json" multiple>
-  <input type="file" id="restoreInput" accept=".json" style="display:none">
-  <button class="btn" id="btnSelectAll">☑ 全选</button>
   <button class="btn" id="btnExport">📤 导出全部</button>
 </div>
 
@@ -91,6 +90,7 @@ body {
 <div class="footer">
   <div class="hint">
     💡 勾选的题库在考试时生效<br>
+    导入按钮支持 Excel、题库 JSON 和备份 JSON<br>
     多题库按顺序匹配，排前面的优先
   </div>
   <button class="btn btn-primary" id="btnSave">💾 保存并关闭</button>
