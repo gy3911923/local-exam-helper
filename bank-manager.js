@@ -163,9 +163,13 @@ async function handleImport(e) {
   const totalFiles = files.length;
   let processedFiles = 0;
 
-  const updateProgress = () => {
-    const remaining = totalFiles - processedFiles;
-    $stats.textContent = `正在导入... ${processedFiles}/${totalFiles} 完成`;
+  const updateProgress = (detail = '') => {
+    $stats.textContent = `正在导入... ${processedFiles}/${totalFiles}`;
+    $list.innerHTML = `<div class="empty">
+      <div class="empty-icon">⏳</div>
+      <p>正在解析题库文件...</p>
+      <p style="font-size:12px;margin-top:4px">${processedFiles}/${totalFiles} 完成${detail ? ' · ' + detail : ''}</p>
+    </div>`;
   };
   updateProgress();
 
@@ -194,7 +198,11 @@ async function handleImport(e) {
           throw new Error('文件中没有可导入的题库');
         }
 
+        let candidateIdx = 0;
         for (const candidate of candidates) {
+          candidateIdx++;
+          updateProgress(`${file.name} · 题库 ${candidateIdx}/${candidates.length} · 正在处理...`);
+
           const prepared = prepareQuestions(candidate.questions);
           if (prepared.length === 0) {
             throw new Error('解析结果为空，或题目缺少题干字段');
