@@ -443,8 +443,10 @@ const ExamHelper = {
       hoverTarget.addEventListener('mouseenter', async () => {
         if (this._mode !== 'normal') return;
 
-        // 立即显示匹配结果
-        FloatPanel.showResult(mr.question, mr);
+        // 关键: 不使用闭包里的旧 mr, 从 this._matchResults 实时查
+        // 否则导入题库后 v1.10.3 的重扫更新了 _matchResults, 但 hover 闭包仍是旧对象
+        const cur = this._matchResults.find(m => m.question === q) || mr;
+        FloatPanel.showResult(q, cur);
 
         if (!q.inputElements || q.inputElements.length === 0) return;
 
@@ -454,12 +456,12 @@ const ExamHelper = {
         const key = q.normalizedStem || q.stemText;
 
         // 答题逻辑：已正确→跳过 / 空白→自动选 / 自答错→纠一次 / 手动选→不碰
-        if (mr.canAutoAnswer) {
+        if (cur.canAutoAnswer) {
           const alreadySelected = this._getSelectedInput(q);
           const allSelected = this._getAllSelectedInputs(q);
 
           // ① 已正确 → 跳过
-          if (alreadySelected && this._isSameAnswer(alreadySelected, mr.bestAnswer, q)) {
+          if (alreadySelected && this._isSameAnswer(alreadySelected, cur.bestAnswer, q)) {
             this._answeredQuestions.add(key);
             return;
           }
@@ -468,8 +470,8 @@ const ExamHelper = {
           if (allSelected.length === 0) {
             try {
               await Helpers.sleep(Helpers.randomDelay(100, 300));
-              const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
-              const clicked = await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+              const bankOptions = (cur.results && cur.results[0]) ? (cur.results[0].options || null) : null;
+              const clicked = await this._selectAnswers(q, cur.bestAnswer, bankOptions);
               if (clicked > 0) {
                 this._answeredQuestions.add(key);
                 FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
@@ -489,8 +491,8 @@ const ExamHelper = {
                 if (w) w.classList.remove('is-checked');
               }
               await Helpers.sleep(Helpers.randomDelay(50, 150));
-              const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
-              await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+              const bankOptions = (cur.results && cur.results[0]) ? (cur.results[0].options || null) : null;
+              await this._selectAnswers(q, cur.bestAnswer, bankOptions);
               this._correctedQuestions.add(key);
               FloatPanel.updateStatus(true, this._banks.length, this._answeredQuestions.size, this._correctedQuestions.size);
             } catch(e) { /* ignore */ }
