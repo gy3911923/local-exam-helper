@@ -157,18 +157,15 @@ const QuestionFinder = {
   /** 从节点提取题干文本（去除所有选项label后剩余的文本） */
   _getStemTextFromNode(node) {
     const clone = node.cloneNode(true);
-    // 去除 anti-cheat 隐藏干扰（苏电e学堂注入隐藏标签)
-    //   display:none / opacity:0 / font-size:0 / visibility:hidden
+    // 去除 anti-cheat 隐藏干扰
     const hidden = clone.querySelectorAll(
       '[style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]'
     );
     hidden.forEach(el => el.remove());
-    // 去除选项label
-    const labels = clone.querySelectorAll('label');
-    labels.forEach(label => {
-      const inp = label.querySelector('input[type="radio"], input[type="checkbox"]');
-      if (inp) label.remove();
-    });
+    // 删除所有含选项文字的元素
+    //   苏电e学堂的 radio input 是 label 的兄弟节点(不在label里)
+    //   旧逻辑只看 label>input 父子关系,漏了兄弟关系的 .radio-label / .item-details
+    clone.querySelectorAll('label, .radio-label, .checkbox-label, .item-details').forEach(el => el.remove());
     return (clone.textContent || '').replace(/\s+/g, ' ').trim();
   },
 
