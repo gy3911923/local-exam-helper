@@ -485,43 +485,17 @@ async function selectAll() {
 async function deleteAll() {
   if (banks.length === 0) return;
   if (!confirm(`确定要删除全部 ${banks.length} 个题库吗？此操作不可恢复。`)) return;
-  const result = prompt('请输入 DELETE 确认清空：');
-  if (result !== 'DELETE') return;
-
   const deleteBtn = document.getElementById('btnDeleteAll');
   deleteBtn?.setAttribute('disabled', 'disabled');
 
-  let deletedCount = 0;
-  let failedCount = 0;
-
   try {
-    const bankIds = banks.map(b => b.id);
-    for (const bankId of bankIds) {
-      try {
-        const response = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId });
-        if (response && response.success === true) {
-          deletedCount++;
-          activeIds.delete(bankId);
-        } else {
-          failedCount++;
-          console.error('删除失败:', bankId, response);
-        }
-      } catch (e) {
-        failedCount++;
-        console.error('删除异常:', bankId, e);
-      }
-    }
-
-    await chrome.storage.local.set({ activeBanks: [...activeIds] });
+    await Promise.all(banks.map(bank =>
+      chrome.runtime.sendMessage({ action: 'deleteBank', bankId: bank.id })
+    ));
+    await chrome.storage.local.set({ activeBanks: [] });
+    activeIds.clear();
     await loadBanks();
-
-    if (deletedCount > 0 && failedCount === 0) {
-      toast(`已清空全部题库（${deletedCount} 个）`);
-    } else if (deletedCount > 0) {
-      toast(`已删除 ${deletedCount} 个，${failedCount} 个失败`, 'error');
-    } else {
-      toast('删除失败：所有题库均无法删除，请刷新页面后重试', 'error');
-    }
+    toast('已清空全部题库');
   } catch (e) {
     toast('清空失败: ' + (e.message || '未知错误'), 'error');
     await loadBanks();
