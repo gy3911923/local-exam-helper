@@ -58,5 +58,5 @@ function openBankManager() {
 }
 
 function openSettings() {
-  chrome.tabs.create({ url: chrome.runtime.getURL('bank-manager.html') });
+  chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 }

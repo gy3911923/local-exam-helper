@@ -67,28 +67,6 @@ body {
 .safe-btn .hint-text { font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
 
 .footer { padding: 8px 16px; text-align: center; font-size: 10px; color: #475569; border-top: 1px solid #1f1f35; }
-
-.save-tip {
-  margin: 8px 16px 0;
-  padding: 10px 12px;
-  background: rgba(251,191,36,0.08);
-  border: 1px solid rgba(251,191,36,0.25);
-  border-radius: 8px;
-}
-.save-tip-title {
-  font-size: 12px; font-weight: 700; color: #fbbf24;
-  margin-bottom: 6px;
-}
-.save-tip-content {
-  font-size: 11px; color: #cbd5e1; line-height: 1.6;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  word-break: break-all;
-  margin-bottom: 6px;
-}
-.save-tip-warn {
-  font-size: 11px; color: #fca5a5; line-height: 1.5;
-  padding-top: 6px; border-top: 1px dashed rgba(251,191,36,0.2);
-}
 </style>
 </head>
 <body>
@@ -131,31 +109,18 @@ body {
   <div class="instruction-item"><b>Ctrl+Shift+S</b> — <span style="color:#fbbf24">保存页面</span>（考中随时按！）</div>
 </div>
 
-<div class="save-tip">
-  <div class="save-tip-title">💾 考试中随时按 Ctrl+Shift+S</div>
-  <div class="save-tip-content">
-    保存双文件到 <b>桌面</b>：<br>
-    📄 <span id="fnHtml">exam_page_20260720_xxxxxx.html</span><br>
-    🔍 <span id="fnJson">exam_page_20260720_xxxxxx_debug.json</span>
-  </div>
-  <div class="save-tip-warn">
-    ⚠️ 考前必须 <b>chrome://settings/downloads</b><br>
-    位置改成「桌面」！否则找不着！
-  </div>
-</div>
-
 <div class="btn-row">
   <button class="safe-btn" id="btnBankManager" style="--color:#1a73e8;border-color:#1a73e8">
-    📚 打开题库管理
-    <span class="hint-text">考试前操作，考前配置完毕即可</span>
+    📚 题库管理
+    <span class="hint-text">考前导入题库、配置激活</span>
   </button>
   <button class="safe-btn" id="btnSettings">
-    ⚙️ 打开设置面板
-    <span class="hint-text">调整匹配阈值、OCR密钥（如有）</span>
+    ⌨️ 快捷键设置
+    <span class="hint-text">查看或修改 Ctrl+Shift+E/H/S</span>
   </button>
 </div>
 
-<div class="footer">纯本地 · 无外网 · 零切屏 · v1.11.0</div>
+<div class="footer">纯本地 · 无外网 · 零切屏 · v1.11.2</div>
 
 <script src="popup.js"></script>
 </body>
