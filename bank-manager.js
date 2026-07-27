@@ -160,10 +160,20 @@ async function handleImport(e) {
   const importBtn = document.getElementById('btnImport');
   importBtn?.setAttribute('disabled', 'disabled');
 
+  const totalFiles = files.length;
+  let processedFiles = 0;
+
+  const updateProgress = () => {
+    const remaining = totalFiles - processedFiles;
+    $stats.textContent = `正在导入... ${processedFiles}/${totalFiles} 完成`;
+  };
+  updateProgress();
+
   let success = 0;
   let failed = 0;
   let totalQ = 0;
   let duplicates = 0;
+  let replaced = 0;
   const errors = [];
 
   try {
@@ -193,21 +203,24 @@ async function handleImport(e) {
           const unique = deduplicate(prepared);
           duplicates += prepared.length - unique.length;
 
-          // 同名覆盖：先删旧题库再存新的（避免重复导入两套相同题库）
-          const existing = banks.find(b => b.name === candidate.name);
-          if (existing) {
-            const delResp = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: existing.id });
-            if (!delResp || delResp.success !== true) {
-              throw new Error(`无法覆盖已有题库「${candidate.name}」`);
-            }
-            activeIds.delete(existing.id);
-          }
-
+          // 同名或同内容覆盖：兼容 xlsx/json 后缀、空格和全半角标点差异
+          const existingBanks = findDuplicateBanks(candidate.name, unique);
           const bank = createBank(candidate.name, unique);
           const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
           if (!result || !result.id) throw new Error('后台保存失败');
 
+          // 先保存新版本，再删除旧版本，避免覆盖失败时旧题库丢失
+          await Promise.all(existingBanks.map(async existing => {
+            const delResp = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: existing.id });
+            if (delResp && delResp.success === false) {
+              throw new Error(`无法清理旧题库「${existing.name}」`);
+            }
+          }));
+
+          replaceBankInMemory(existingBanks, bank);
+          existingBanks.forEach(existing => activeIds.delete(existing.id));
           activeIds.add(bank.id);
+          replaced += existingBanks.length;
           success++;
           totalQ += unique.length;
         }
@@ -216,6 +229,8 @@ async function handleImport(e) {
         errors.push(`${file.name}: ${err.message || '未知错误'}`);
         console.error('导入失败:', file.name, err);
       }
+      processedFiles++;
+      updateProgress();
     }
 
     // 导入成功的题库默认激活；失败文件不会污染激活列表
@@ -234,6 +249,7 @@ async function handleImport(e) {
 
   const messages = [];
   if (success > 0) messages.push(`成功入库 ${success} 个题库（${totalQ} 题）`);
+  if (replaced > 0) messages.push(`覆盖旧题库 ${replaced} 个`);
   if (duplicates > 0) messages.push(`已去重 ${duplicates} 题`);
   if (failed > 0) messages.push(`${failed} 个文件导入失败`);
   if (errors.length > 0) messages.push(...errors);
@@ -245,11 +261,65 @@ function createBank(name, questions) {
   return {
     id: Helpers.uid(),
     name: String(name || '未命名题库').trim() || '未命名题库',
+    nameKey: normalizeBankName(name),
+    fingerprint: bankFingerprint(questions),
     questions,
     questionCount: questions.length,
     createdAt: now,
     updatedAt: now
   };
+}
+
+// 题库名称统一键：兼容 xlsx/json 后缀、全半角标点和空白差异
+function normalizeBankName(name) {
+  const base = String(name ?? '')
+    .trim()
+    .replace(/(?:\.(?:xlsx|xls|json))+$/i, '')
+    .replace(/\s*[\(（]\d+[\)）]\s*$/u, '')
+    .replace(/(?:[-_\s]?副本)$/u, '');
+  return TextNormalizer.normalize(base);
+}
+
+function normalizeAnswerForFingerprint(answer) {
+  const raw = String(answer ?? '').trim().toUpperCase();
+  if (/^[A-H]+$/.test(raw)) return [...new Set(raw.split(''))].sort().join('');
+  return TextNormalizer.normalize(raw);
+}
+
+// 题库内容指纹：名称改变或文件扩展名不同，内容相同仍视为同一题库
+function bankFingerprint(questions) {
+  if (!Array.isArray(questions) || questions.length === 0) return '';
+  return questions.map(q => {
+    const options = Object.entries(normalizeOptions(q?.options))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}:${TextNormalizer.normalize(value)}`)
+      .join('|');
+    return [
+      TextNormalizer.normalize(q?.question || ''),
+      TextNormalizer.normalize(q?.type || ''),
+      normalizeAnswerForFingerprint(q?.answer),
+      options
+    ].join('\\u001f');
+  }).sort().join('\\u001e');
+}
+
+function findDuplicateBanks(name, questions) {
+  const nameKey = normalizeBankName(name);
+  const fingerprint = bankFingerprint(questions);
+  return banks.filter(existing => {
+    const existingNameKey = existing.nameKey || normalizeBankName(existing.name);
+    if (nameKey && existingNameKey === nameKey) return true;
+    const existingFingerprint = existing.fingerprint || bankFingerprint(existing.questions);
+    return fingerprint && existingFingerprint && existingFingerprint === fingerprint;
+  });
+}
+
+function replaceBankInMemory(existingBanks, bank) {
+  const oldIds = new Set(existingBanks.map(item => item.id));
+  const firstIndex = existingBanks.length > 0 ? banks.findIndex(item => item.id === existingBanks[0].id) : -1;
+  banks = banks.filter(item => !oldIds.has(item.id));
+  const insertAt = firstIndex >= 0 ? Math.min(firstIndex, banks.length) : banks.length;
+  banks.splice(insertAt, 0, bank);
 }
 
 function prepareQuestions(rawQuestions) {
@@ -261,7 +331,7 @@ function prepareQuestions(rawQuestions) {
     const options = normalizeOptions(item.options);
     return {
       ...item,
-      type: String(item.type || 'single'),
+      type: normalizeType(String(item.type || 'single')),
       question,
       options,
       answer: String(item.answer ?? '').trim(),
