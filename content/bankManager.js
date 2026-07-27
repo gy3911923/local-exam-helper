@@ -249,6 +249,11 @@ const BankManager = {
     event.target.value = '';
     await this._refreshList();
 
+    // 导入成功后触发内容脚本重扫(否则用旧的空题库结果)
+    if (success > 0 && typeof ExamHelper !== 'undefined' && ExamHelper._scanAndAnswer) {
+      try { await ExamHelper._scanAndAnswer(); } catch(e) {}
+    }
+
     // 导入结果提示
     let msg = [];
     if (success > 0) msg.push(`✅ 成功入库 ${success} 个题库（共 ${totalQuestions} 题）`);
