@@ -197,7 +197,9 @@ const QuestionFinder = {
       }
       if (texts.length > 0) return texts.join(' ');
     }
-    return this._getStemTextFromNode(container);
+    const raw = this._getStemTextFromNode(container);
+    // 去掉题号前缀 "1 . " 和分数后缀 "（1.0分）"
+    return raw.replace(/^\d+\s*[.、）\)]\s*/, '').replace(/[（(]\d+(\.\d+)?分[）)]\s*$/, '').trim();
   },
 
   /** 提取选项文本（兼容 Element UI / 标准表单 / 自定义结构） */

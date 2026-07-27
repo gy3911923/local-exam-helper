@@ -513,14 +513,15 @@ const ExamHelper = {
 
     this._observer = new MutationObserver(
       Helpers.debounce(() => {
+        // 可选扫描的时机不重扫描相同的题库集
         if (this._mode !== 'off') this._scanAndAnswer();
-      }, 1000)
+      }, 2000)
     );
 
     this._observer.observe(document.body, {
       childList: true,
-      subtree: true,
-      characterData: true
+      subtree: true
+      // 不用 characterData: 倒计时每秒更新 → 不必要的主力引导重扫描
     });
   },
 
