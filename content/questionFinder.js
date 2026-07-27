@@ -221,10 +221,15 @@ const QuestionFinder = {
         }
       }
 
-      // 策略2: 标准 label[for] 关联
+      // 策略2: 标准 label[for] 关联（先去掉 iconfont 元素）
       if (!optionText && input.id) {
         const label = Helpers.safeQuery(`label[for="${input.id}"]`, container);
-        if (label) optionText = (label.textContent || '').trim();
+        if (label) {
+          const lb = label.cloneNode(true);
+          // 去除 iconfont 图标字符（苏电e学堂用 iconfont 显示勾选状态）
+          lb.querySelectorAll('.iconfont, [class*="iconfont"]').forEach(el => el.remove());
+          optionText = (lb.textContent || '').trim();
+        }
       }
 
       // 策略3: 父元素文本回退
