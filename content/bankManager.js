@@ -414,18 +414,21 @@ const BankManager = {
 
   /** 通过background保存题库,并自动加入 activeBanks 让其立刻可用 */
   async _saveBank(bank) {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: 'saveBank', bank }, async () => {
-        try {
-          // 关键:导入即激活,免去手动勾选
-          const saved = await chrome.storage.local.get(['activeBanks']);
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: 'saveBank', bank }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        // 导入即激活
+        chrome.storage.local.get(['activeBanks']).then((saved) => {
           const activeIds = saved.activeBanks || [];
           if (!activeIds.includes(bank.id)) {
             activeIds.push(bank.id);
-            await chrome.storage.local.set({ activeBanks: activeIds });
+            chrome.storage.local.set({ activeBanks: activeIds });
           }
-        } catch(e) { /* ignore */ }
-        resolve();
+        }).catch(() => {});
+        resolve(response);
       });
     });
   },
