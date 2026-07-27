@@ -1,6 +1,6 @@
 # Local Exam Helper · 本地题库答题助手
 
-[![Version](https://img.shields.io/badge/version-1.10.8-brightgreen)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.11.5-brightgreen)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest%20V3-Chrome-green)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 
@@ -61,11 +61,15 @@ git clone <本仓库地址>
 
 ## 快速开始
 
-### 1. 导入题库
+### 1. 考前准备（必须）
 
-- 点击插件图标 →「题库管理」
-- 拖入 `.xlsx` 或 `.json` 题库文件
-- 导入即自动激活
+```
+点击插件图标 →「题库管理」→ 导入 xlsx/json 题库
+→ 全选激活 → 💾 保存并关闭
+→ 再打开考试页面 → Ctrl+Shift+E 启动
+```
+
+⚠️ **所有题库操作在考前完成**。考试中点击插件图标会触发页面失焦，被切屏检测判定为不合格。考试期间仅使用快捷键。
 
 ### 2. 题库格式
 
@@ -204,8 +208,11 @@ A: 该题不会自动勾选，浮窗显示多组结果供人工判断。
 **Q: 识别不出题目？**  
 A: 确认页面使用标准表单控件（`<input type="radio">` / `<input type="checkbox">`）。
 
+**Q: 题库管理在哪？考试中能打开吗？**  
+A: 点击插件图标 →「题库管理」，打开独立标签页。考试期间切勿点击插件图标，会触发切屏检测。所有导入、激活操作在考前完成。
+
 **Q: 保存的文件在哪？**  
-A: 考前将浏览器默认下载目录改为桌面。
+A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S` 静默保存，不触发任何弹窗。
 
 ---
 
@@ -213,6 +220,7 @@ A: 考前将浏览器默认下载目录改为桌面。
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.11.x | 题库管理重构：导入覆盖 · 同名去重 · 进度提示 · IndexedDB 错误透传 · 独立页面安全性 |
 | v1.10.x | 双系统兼容：Element UI + jQuery · 抗混淆 · 自动激活 · 性能优化 |
 | v1.9.x | 适配 Element UI 考试系统：no-name 分组 · hover 逐题作答 · 浮窗重构 |
 | v1.8.x | 浮窗 UI · 隐形模式 · 题库管理 · 反检测基础 |
