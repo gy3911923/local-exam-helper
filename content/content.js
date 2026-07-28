@@ -20,6 +20,7 @@ const ExamHelper = {
   _answeredQuestions: new Set(), // 已作答的题目stem文本哈希，避免重复作答
   _correctedQuestions: new Set(), // 已纠错的题目，避免重复计数
   _hoverBound: false, // 防止 MutationObserver 重绑事件
+  _banksVersion: null, // 题库版本标记，避免每次重扫都走 IndexedDB
 
   /** 初始化 */
   async init() {
@@ -156,9 +157,15 @@ const ExamHelper = {
     try {
       const config = await chrome.storage.local.get(['activeBanks', 'bankPriorities']);
       const activeIds = config.activeBanks || [];
-      const priorities = config.bankPriorities || {};
+      const version = activeIds.sort().join(',');
 
-      // 请求background获取完整题库数据
+      // 缓存命中：题库配置没变，跳过 IndexedDB → 消息通道序列化
+      if (version === this._banksVersion && this._banks.length > 0) {
+        return;
+      }
+
+      this._banksVersion = version;
+      const priorities = config.bankPriorities || {};
       const response = await chrome.runtime.sendMessage({
         action: 'getActiveBankData',
         bankIds: activeIds,

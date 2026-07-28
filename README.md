@@ -1,6 +1,6 @@
 # Local Exam Helper · 本地题库答题助手
 
-[![Version](https://img.shields.io/badge/version-1.11.5-brightgreen)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.11.6-brightgreen)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest%20V3-Chrome-green)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 
@@ -220,7 +220,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
-| v1.11.x | 题库管理重构：导入覆盖 · 同名去重 · 进度提示 · IndexedDB 错误透传 · 独立页面安全性 |
+| v1.11.x | 题库管理重构 + 性能优化：导入覆盖 · 同名去重 · 进度提示 · IndexedDB 错误透传 · _loadBanks 缓存 |
 | v1.10.x | 双系统兼容：Element UI + jQuery · 抗混淆 · 自动激活 · 性能优化 |
 | v1.9.x | 适配 Element UI 考试系统：no-name 分组 · hover 逐题作答 · 浮窗重构 |
 | v1.8.x | 浮窗 UI · 隐形模式 · 题库管理 · 反检测基础 |
