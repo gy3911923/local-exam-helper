@@ -78,17 +78,83 @@ const QuestionFinder = {
     return groups;
   },
 
-  /** 按 Element UI 容器分组（el-radio-group / el-checkbox-group） */
+  /**
+   * 按 Element UI 容器分组（el-radio-group / el-checkbox-group）
+   * 兜底：页面无 el-radio-group 时（如苏电e学堂自测页），按题目级祖先容器分组
+   */
   _groupByElWrapper(inputs, selector) {
-    const groups = {};
-    let idx = 0;
+    // 第一轮：标准 wrapper
+    const stdMap = new Map();
+    let orphans = 0;
     for (const input of inputs) {
       const wrapper = input.closest(selector);
-      const key = wrapper ? '_el_wrap_' + (idx++) : '_orphan_' + Math.random();
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(input);
+      if (wrapper) {
+        if (!stdMap.has(wrapper)) stdMap.set(wrapper, []);
+        stdMap.get(wrapper).push(input);
+      } else {
+        orphans++;
+      }
+    }
+
+    // 标准 wrapper 覆盖过半数 → 直接用标准分组
+    if (stdMap.size > 0 && inputs.length - orphans >= inputs.length / 2) {
+      return this._mapToGroups(stdMap);
+    }
+
+    // 兜底：按题目级祖先容器分组（无 el-radio-group 的 Element UI 页面）
+    // 每题的 4 个选项同属一个题目容器 → 归入同一组 → 不再变成孤儿子题
+    const qMap = new Map();
+    for (const input of inputs) {
+      const container = this._findQuestionGroupContainer(input);
+      if (container) {
+        if (!qMap.has(container)) qMap.set(container, []);
+        qMap.get(container).push(input);
+      } else {
+        // 真正的孤儿：各自独立成组，尽力提取
+        const solo = [input];
+        qMap.set(solo, solo);
+      }
+    }
+    return this._mapToGroups(qMap);
+  },
+
+  /** Map → {key: array}（key 仅占位，_extractQuestion 不依赖） */
+  _mapToGroups(map) {
+    const groups = {};
+    let i = 0;
+    for (const arr of map.values()) {
+      groups['_g' + (i++)] = arr;
     }
     return groups;
+  },
+
+  /** 查找单个 input 的题目级容器（无 el-radio-group 时的后备分组依据） */
+  _findQuestionGroupContainer(input) {
+    const candidates = [
+      '.examPaper_item',            // 苏电e学堂自测页：整题容器
+      '.question-panel-middle',     // 苏电e学堂考试页
+      '.item-panel-all-wrap',       // 苏电e学堂答题卡项
+      '.question-item',
+      '.exam-question',
+      '[class*="question-item"]',
+      '[class*="examPaper"]'
+    ];
+    for (const sel of candidates) {
+      const el = input.closest(sel);
+      if (el) return el;
+    }
+    // 通用回退：向上找包含 ≥2 个同类 input 且含题干文本的容器
+    let cursor = input.parentElement;
+    for (let d = 0; d < 8 && cursor; d++) {
+      if (cursor.nodeType !== 1 || cursor.tagName === 'BODY' || cursor.tagName === 'HTML') break;
+      const siblingInputs = cursor.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+      if (siblingInputs.length >= 2) {
+        const stem = this._getStemTextFromNode(cursor);
+        if (stem && stem.length >= 4) return cursor;
+      }
+      cursor = cursor.parentElement;
+    }
+    return null;
   },
 
   /** 从一组input中提取题目信息 */
