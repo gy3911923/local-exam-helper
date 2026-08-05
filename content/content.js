@@ -91,8 +91,19 @@ const ExamHelper = {
     BankManager.destroy();
     await this._loadBanks();
     await this._scanAndAnswer();
-    // 隐形模式下逐题作答，每题间隔2-4秒模拟人类
-    await this._autoAnswerStealth(2000, 4000);
+
+    // 读取用户配置的答题间隙（秒），默认 5 秒
+    let delaySec = 5;
+    try {
+      const config = await chrome.storage.local.get(['stealthDelay']);
+      const parsed = Number(config.stealthDelay);
+      if (parsed > 0 && parsed <= 60) delaySec = parsed;
+    } catch(e) { /* ignore */ }
+
+    // 在设定值 ±10% 范围内随机，模拟人类节奏
+    const minMs = Math.max(1000, Math.round(delaySec * 900));
+    const maxMs = Math.max(minMs + 1, Math.round(delaySec * 1100));
+    await this._autoAnswerStealth(minMs, maxMs);
   },
 
   /**

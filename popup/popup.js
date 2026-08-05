@@ -10,12 +10,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSettings = document.getElementById('btnSettings');
   if (btnBank) btnBank.addEventListener('click', openBankManager);
   if (btnSettings) btnSettings.addEventListener('click', openSettings);
+
+  // 隐形模式答题间隙（秒）输入框
+  const delayInput = document.getElementById('stealthDelay');
+  if (delayInput) {
+    delayInput.addEventListener('change', () => {
+      const val = Math.max(1, Math.min(60, Number(delayInput.value) || 5));
+      delayInput.value = val;
+      chrome.storage.local.set({ stealthDelay: val });
+    });
+  }
 });
 
 async function refreshUI() {
   try {
     const config = await chrome.storage.local.get([
-      'mode', 'activeBanks', 'autoMode', 'matchThreshold'
+      'mode', 'activeBanks', 'autoMode', 'matchThreshold', 'stealthDelay'
     ]);
 
     const mode = config.mode || 'off';
@@ -46,6 +56,12 @@ async function refreshUI() {
 
     document.getElementById('infoThreshold').textContent =
       Math.round((config.matchThreshold || 0.6) * 100) + '%';
+
+    // 恢复已保存的答题间隙
+    const delayInput = document.getElementById('stealthDelay');
+    if (delayInput && !delayInput.dataset.userEdited) {
+      delayInput.value = config.stealthDelay || 5;
+    }
   } catch(e) {
     console.error(e);
   }
