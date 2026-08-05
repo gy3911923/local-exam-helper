@@ -49,7 +49,7 @@ async function refreshUI() {
     }
 
     document.getElementById('infoMode').textContent =
-      (config.autoMode === 'manual') ? '手动' : '逐题自动';
+      mode === 'stealth' ? '后台模式' : (mode === 'normal' ? '标准模式' : '未启动');
 
     document.getElementById('infoBanks').textContent =
       (config.activeBanks || []).length + ' 个';

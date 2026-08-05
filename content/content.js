@@ -29,8 +29,16 @@ const ExamHelper = {
     this._initialized = true;
 
     try {
-      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode']);
+      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode', 'mode']);
       this._answerMode = config.autoMode || 'auto';
+
+      // 默认启动：打开考试页面时自动进入标准模式（off → normal）
+      // 仅命中考试域名才自动启动，避免普通网页被注入浮窗
+      if ((!config.mode || config.mode === 'off') && this._isExamPage()) {
+        this._mode = 'normal';
+        chrome.storage.local.set({ mode: 'normal' }).catch(() => {});
+        this._enableNormal().catch(() => {});
+      }
     } catch(e) { /* ignore */ }
 
     // 监听来自 background 的消息
@@ -60,6 +68,16 @@ const ExamHelper = {
       }
       return true;
     });
+  },
+
+  /** 判断是否考试页面（两个考试系统域名） */
+  _isExamPage() {
+    try {
+      const host = location.hostname || '';
+      return host.includes('aqgk.js.sgcc.com.cn') || host.includes('elearning.js.sgcc.com.cn');
+    } catch(e) {
+      return false;
+    }
   },
 
   /** 模式切换核心 */
