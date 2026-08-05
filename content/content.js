@@ -21,6 +21,7 @@ const ExamHelper = {
   _correctedQuestions: new Set(), // 已纠错的题目，避免重复计数
   _hoverBound: false, // 防止 MutationObserver 重绑事件
   _banksVersion: null, // 题库版本标记，避免每次重扫都走 IndexedDB
+  _questionsFingerprint: null, // 题目集指纹，题目没变时跳过 matchAll
 
   /** 初始化 */
   async init() {
@@ -161,6 +162,7 @@ const ExamHelper = {
     this._matchResults = [];
     this._answeredQuestions.clear();
     this._correctedQuestions.clear();
+    this._questionsFingerprint = null;
   },
 
   /** 加载激活题库 */
@@ -196,18 +198,26 @@ const ExamHelper = {
     this._questions = QuestionFinder.findAll();
 
     if (this._questions.length === 0) {
+      this._questionsFingerprint = null;
       if (this._mode === 'normal') FloatPanel.showIdle();
       return;
     }
 
-    // 加载最新题库
+    // 题目集指纹：题目没变（如用户点击选项、倒计时刷新）→ 跳过全量匹配
+    // 只有翻页/加载新题（题目集变化）才真正重新匹配
+    const fingerprint = this._questions.map(q => q.normalizedStem || q.stemText || '').join('\u0001');
+
+    // 加载最新题库（缓存命中时零成本；题库激活变化时自动失效重载）
     await this._loadBanks();
+
+    if (fingerprint === this._questionsFingerprint) {
+      return;
+    }
+    this._questionsFingerprint = fingerprint;
 
     // 匹配
     const threshold = await this._getThreshold();
     this._matchResults = Matcher.matchAll(this._questions, this._banks, threshold);
-
-    // 不为全部题目作答——等待悬停触发逐题作答
 
     // 仅普通模式显示悬浮窗（首次绑定，后续只更新状态）
     if (this._mode === 'normal') {
