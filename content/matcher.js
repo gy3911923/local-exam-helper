@@ -106,6 +106,16 @@ const Matcher = {
     }
 
     // 检测答案冲突（前两名得分相近但答案不同）
+    // 100% 完美匹配（题干一字不差）→ 直接信任，不参与冲突判定
+    // 否则第二名得分接近且答案不同 → 可能近似题误配 → 标存疑
+    if (best.score >= 0.99) {
+      return {
+        results,
+        canAutoAnswer: true,
+        bestAnswer: best.answer,
+        status: 'matched'
+      };
+    }
     if (results.length >= 2) {
       const second = results[1];
       if (second.score >= threshold &&

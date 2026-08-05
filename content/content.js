@@ -112,6 +112,9 @@ const ExamHelper = {
    */
   async _autoAnswerStealth(minDelay = 2000, maxDelay = 5000) {
     for (const mr of this._matchResults) {
+      // 模式已切换（normal/off）→ 立即停止隐形模式作答
+      if (this._mode !== 'stealth') return;
+
       const q = mr.question;
       if (!q.inputElements || q.inputElements.length === 0) continue;
 
@@ -137,6 +140,8 @@ const ExamHelper = {
 
         // 空白 → 自动选择
         await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
+        // sleep 期间用户可能切换了模式 → 放弃本次点击
+        if (this._mode !== 'stealth') return;
         try {
           const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
           await this._selectAnswers(q, mr.bestAnswer, bankOptions);
