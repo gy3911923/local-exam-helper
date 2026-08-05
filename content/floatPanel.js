@@ -290,19 +290,13 @@ const FloatPanel = {
   },
 
   /** 更新状态标识 */
-  updateStatus(enabled, activeBanksCount, answeredCount, correctedCount) {
+  updateStatus(enabled, activeBanksCount) {
     const px = this._px;
     const statusEl = document.getElementById(`${px}_status`);
     if (!statusEl) return;
     if (enabled) {
       const parts = [];
-      if (answeredCount !== undefined) {
-        parts.push(`已答${answeredCount}题`);
-      }
-      if (correctedCount && correctedCount > 0) {
-        parts.push(`纠错${correctedCount}题`);
-      }
-      if (activeBanksCount !== undefined && parts.length === 0) {
+      if (activeBanksCount !== undefined) {
         parts.push(`${activeBanksCount}个题库`);
       }
       statusEl.textContent = '🟢 ' + (parts.length ? parts.join(' · ') : '运行中');
