@@ -73,18 +73,27 @@ chrome.commands.onCommand.addListener(async (command) => {
     let errors = [];
 
     // ① 先尝试 MHTML（需要 pageCapture 权限 + http/https 协议）
-    try {
-      const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
-      const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
-      await chrome.downloads.download({
-        url: mhtmlUrl,
-        filename: baseFilename + '.mhtml',
-        saveAs: false
-      });
-      savedFiles.push('.mhtml');
-    } catch (e) {
-      // pageCapture 失败（如 file:// 协议）→ 降级到 HTML
-      errors.push('MHTML: ' + e.message);
+    //    低版本 Chrome 可能无 pageCapture API → 存在性检查后降级 HTML
+    if (chrome.pageCapture && typeof chrome.pageCapture.saveAsMHTML === 'function') {
+      try {
+        const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
+        const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
+        await chrome.downloads.download({
+          url: mhtmlUrl,
+          filename: baseFilename + '.mhtml',
+          saveAs: false
+        });
+        savedFiles.push('.mhtml');
+      } catch (e) {
+        // pageCapture 失败（如 file:// 协议）→ 降级到 HTML
+        errors.push('MHTML: ' + e.message);
+      }
+    } else {
+      errors.push('MHTML: 当前浏览器不支持 pageCapture');
+    }
+
+    // ② HTML 降级（MHTML 不可用或失败时）
+    if (savedFiles.length === 0) {
       try {
         const htmlResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureHtml' });
         if (htmlResponse && htmlResponse.html) {

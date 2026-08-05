@@ -9,8 +9,8 @@ const BankManager = {
   _banks: [],
   _cssInjected: false,
 
-  // 随机前缀——反检测，每次注入不同
-  _px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+  // 随机前缀——反检测，每次注入不同（兼容低版本 Chrome）
+  _px: 'x' + Helpers.randomHex(10),
 
   /** 动态注入随机前缀CSS（仅一次） */
   _injectCSS() {

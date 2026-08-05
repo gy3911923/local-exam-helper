@@ -6,8 +6,8 @@
  */
 const FloatPanel = {
 
-  // 随机前缀——每次注入不同，页面无法靠固定签名检测
-  _px: 'x' + crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+  // 随机前缀——每次注入不同，页面无法靠固定签名检测（兼容低版本 Chrome）
+  _px: 'x' + Helpers.randomHex(10),
   _cssInjected: false,
 
   /** 注入随机化CSS（仅一次） */

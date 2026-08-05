@@ -10,6 +10,24 @@ const Helpers = {
     return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   },
 
+  /**
+   * 生成随机十六进制串（反检测前缀用）
+   * 兼容低版本 Chrome：crypto.randomUUID 需 Chrome 92+，低版本回退 Math.random
+   */
+  randomHex(len = 10) {
+    try {
+      if (crypto && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID().replace(/-/g, '').slice(0, len);
+      }
+    } catch(e) { /* 回退 */ }
+    let s = '';
+    const chars = '0123456789abcdef';
+    for (let i = 0; i < len; i++) {
+      s += chars[Math.floor(Math.random() * 16)];
+    }
+    return s;
+  },
+
   /** 防抖 */
   debounce(fn, delay = 300) {
     let timer;
