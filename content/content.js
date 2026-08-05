@@ -28,17 +28,12 @@ const ExamHelper = {
     if (this._initialized) return;
     this._initialized = true;
 
+    // 默认状态：未启动（off）
+    // 进考试页后按 Ctrl+Shift+E 进普通模式 / Ctrl+Shift+H 进后台模式
+    // 快捷键是浏览器级能力，与网址无关——任何页面按都生效，无需域名白名单
     try {
-      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode', 'mode']);
+      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode']);
       this._answerMode = config.autoMode || 'auto';
-
-      // 默认启动：打开考试页面时自动进入标准模式（off → normal）
-      // 仅命中考试域名才自动启动，避免普通网页被注入浮窗
-      if ((!config.mode || config.mode === 'off') && this._isExamPage()) {
-        this._mode = 'normal';
-        chrome.storage.local.set({ mode: 'normal' }).catch(() => {});
-        this._enableNormal().catch(() => {});
-      }
     } catch(e) { /* ignore */ }
 
     // 监听来自 background 的消息
@@ -68,16 +63,6 @@ const ExamHelper = {
       }
       return true;
     });
-  },
-
-  /** 判断是否考试页面（两个考试系统域名） */
-  _isExamPage() {
-    try {
-      const host = location.hostname || '';
-      return host.includes('aqgk.js.sgcc.com.cn') || host.includes('elearning.js.sgcc.com.cn');
-    } catch(e) {
-      return false;
-    }
   },
 
   /** 模式切换核心 */
