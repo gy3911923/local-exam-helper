@@ -266,7 +266,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'saveBank') {
     _saveBankToDB(msg.bank)
       .then(result => sendResponse(result))
-      .catch(() => sendResponse(null));
+      .catch(error => {
+        console.error('[local-exam-helper] saveBank 失败:', error);
+        sendResponse({ error: error.message || '保存失败' });
+      });
     return true;
   }
 

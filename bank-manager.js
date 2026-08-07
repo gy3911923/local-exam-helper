@@ -215,7 +215,7 @@ async function handleImport(e) {
           const existingBanks = findDuplicateBanks(candidate.name, unique);
           const bank = createBank(candidate.name, unique);
           const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
-          if (!result || !result.id) throw new Error('后台保存失败');
+          if (!result || !result.id) throw new Error(result && result.error ? `后台保存失败: ${result.error}` : '后台保存失败');
 
           // 先保存新版本，再删除旧版本，避免覆盖失败时旧题库丢失
           await Promise.all(existingBanks.map(async existing => {
