@@ -461,7 +461,7 @@ const BankManager = {
     if (secondConfirm !== 'DELETE') return;
 
     for (const bank of this._banks) {
-      await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: bank.id });
+      await Helpers.sendMessage({ action: 'deleteBank', bankId: bank.id });
     }
     await chrome.storage.local.set({ activeBanks: [] });
     await this._refreshList();
@@ -469,7 +469,7 @@ const BankManager = {
 
   /** 删除题库 */
   async _deleteBank(id) {
-    await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: id });
+    await Helpers.sendMessage({ action: 'deleteBank', bankId: id });
     await this._refreshList();
   },
 

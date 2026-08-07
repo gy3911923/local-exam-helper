@@ -19,6 +19,28 @@ const Helpers = {
   sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 };
 
+/**
+ * 兼容低版本 Chrome 的 sendMessage 包装
+ * Chrome 99 之前 chrome.runtime.sendMessage 不返回 Promise
+ * → await 形式在 Chrome 93 得到 undefined → 全部导入失败
+ * 用 callback 形式 + Promise 包装，所有版本通用
+ */
+function sendMsg(msg) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(msg, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ error: chrome.runtime.lastError.message });
+          return;
+        }
+        resolve(response);
+      });
+    } catch(e) {
+      resolve({ error: e.message || '消息发送失败' });
+    }
+  });
+}
+
 let banks = [];
 let activeIds = new Set();
 
@@ -68,7 +90,7 @@ async function loadBanks() {
   if (!isAlive()) { showDead(); return; }
   setLoading();
   try {
-    const response = await chrome.runtime.sendMessage({ action: 'getAllBanks' });
+    const response = await sendMsg({ action: 'getAllBanks' });
     if (!Array.isArray(response)) throw new Error('后台返回的题库数据格式无效');
     banks = response;
     const config = await chrome.storage.local.get(['activeBanks']);
@@ -128,7 +150,7 @@ function renderList() {
       if (!confirm('确定删除该题库？')) return;
       btn.disabled = true;
       try {
-        const result = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: btn.dataset.id });
+        const result = await sendMsg({ action: 'deleteBank', bankId: btn.dataset.id });
         if (!result || result.success !== true) throw new Error('后台删除失败');
         activeIds.delete(btn.dataset.id);
         await chrome.storage.local.set({ activeBanks: [...activeIds] });
@@ -214,12 +236,12 @@ async function handleImport(e) {
           // 同名或同内容覆盖：兼容 xlsx/json 后缀、空格和全半角标点差异
           const existingBanks = findDuplicateBanks(candidate.name, unique);
           const bank = createBank(candidate.name, unique);
-          const result = await chrome.runtime.sendMessage({ action: 'saveBank', bank });
+          const result = await sendMsg({ action: 'saveBank', bank });
           if (!result || !result.id) throw new Error(result && result.error ? `后台保存失败: ${result.error}` : '后台保存失败');
 
           // 先保存新版本，再删除旧版本，避免覆盖失败时旧题库丢失
           await Promise.all(existingBanks.map(async existing => {
-            const delResp = await chrome.runtime.sendMessage({ action: 'deleteBank', bankId: existing.id });
+            const delResp = await sendMsg({ action: 'deleteBank', bankId: existing.id });
             if (delResp && delResp.success === false) {
               throw new Error(`无法清理旧题库「${existing.name}」`);
             }
@@ -307,8 +329,8 @@ function bankFingerprint(questions) {
       TextNormalizer.normalize(q?.type || ''),
       normalizeAnswerForFingerprint(q?.answer),
       options
-    ].join('\\u001f');
-  }).sort().join('\\u001e');
+    ].join('\u001f');
+  }).sort().join('\u001e');
 }
 
 function findDuplicateBanks(name, questions) {
@@ -514,7 +536,7 @@ function esc(s) {
 async function exportAllBanks() {
   if (!isAlive()) { showDead(); return; }
   try {
-    const allBanks = await chrome.runtime.sendMessage({ action: 'getAllBanks' });
+    const allBanks = await sendMsg({ action: 'getAllBanks' });
     if (!Array.isArray(allBanks)) throw new Error('后台返回的题库数据格式无效');
     if (allBanks.length === 0) {
       toast('当前无题库可导出', 'error');
@@ -568,7 +590,7 @@ async function deleteAll() {
 
   try {
     await Promise.all(banks.map(bank =>
-      chrome.runtime.sendMessage({ action: 'deleteBank', bankId: bank.id })
+      sendMsg({ action: 'deleteBank', bankId: bank.id })
     ));
     await chrome.storage.local.set({ activeBanks: [] });
     activeIds.clear();

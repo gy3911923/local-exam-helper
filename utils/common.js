@@ -11,6 +11,28 @@ const Helpers = {
   },
 
   /**
+   * 兼容低版本 Chrome 的 sendMessage 包装
+   * Chrome 99 之前 chrome.runtime.sendMessage 不返回 Promise
+   * → await 形式在 Chrome 93 得到 undefined → 导入/删除全部失败
+   * 用 callback 形式 + Promise 包装，所有版本通用
+   */
+  sendMessage(msg) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(msg, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+            return;
+          }
+          resolve(response);
+        });
+      } catch(e) {
+        resolve({ error: e.message || '消息发送失败' });
+      }
+    });
+  },
+
+  /**
    * 生成随机十六进制串（反检测前缀用）
    * 兼容低版本 Chrome：crypto.randomUUID 需 Chrome 92+，低版本回退 Math.random
    */
