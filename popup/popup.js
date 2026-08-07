@@ -24,11 +24,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function refreshUI() {
   try {
-    const config = await chrome.storage.local.get([
+    // 用 getState 获取当前 tab 真实状态（与快捷键/background 一致）
+    // 不要直接读 storage.mode —— 那是持久历史值，可能和当前 tab 状态不同步
+    const state = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
+        if (chrome.runtime.lastError) { resolve(null); return; }
+        resolve(response);
+      });
+    });
+
+    // 兜底：getState 失败时退回 storage 读取
+    const config = state ? state : await chrome.storage.local.get([
       'mode', 'activeBanks', 'autoMode', 'matchThreshold', 'stealthDelay'
     ]);
 
-    const mode = config.mode || 'off';
+    const mode = (state ? state.mode : config.mode) || 'off';
     const dot = document.getElementById('statusDot');
 
     if (mode === 'stealth') {
@@ -52,15 +62,18 @@ async function refreshUI() {
       mode === 'stealth' ? '后台模式' : (mode === 'normal' ? '标准模式' : '未启动');
 
     document.getElementById('infoBanks').textContent =
-      (config.activeBanks || []).length + ' 个';
+      (state ? (state.activeBanks || []) : (config.activeBanks || [])).length + ' 个';
 
     document.getElementById('infoThreshold').textContent =
-      Math.round((config.matchThreshold || 0.6) * 100) + '%';
+      Math.round(((state ? state.threshold : config.matchThreshold) || 0.6) * 100) + '%';
 
-    // 恢复已保存的答题间隙
+    // 恢复已保存的答题间隙（仅 storage 有）
     const delayInput = document.getElementById('stealthDelay');
     if (delayInput && !delayInput.dataset.userEdited) {
-      delayInput.value = config.stealthDelay || 5;
+      const savedDelay = config.stealthDelay !== undefined
+        ? config.stealthDelay
+        : (state && state.stealthDelay);
+      delayInput.value = savedDelay || 5;
     }
   } catch(e) {
     console.error(e);
