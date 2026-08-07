@@ -187,7 +187,8 @@ const ExamHelper = {
 
       this._banksVersion = version;
       const priorities = config.bankPriorities || {};
-      const response = await chrome.runtime.sendMessage({
+      // 兼容低版本 Chrome：sendMessage 在 Chrome 99 前不返回 Promise
+      const response = await Helpers.sendMessage({
         action: 'getActiveBankData',
         bankIds: activeIds,
         priorities

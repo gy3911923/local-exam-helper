@@ -6,6 +6,27 @@
 // 三态：'off' | 'normal' | 'stealth'
 const tabStates = {};
 
+/**
+ * 兼容低版本 Chrome 的 tabs.sendMessage 包装
+ * Chrome 99 前 chrome.tabs.sendMessage 不返回 Promise
+ * → await 形式在 Chrome 93 得到 undefined → HTML 降级/诊断失效
+ */
+function tabsSendMsg(tabId, msg) {
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.sendMessage(tabId, msg, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+        resolve(response);
+      });
+    } catch(e) {
+      resolve(null);
+    }
+  });
+}
+
 // 初始化存储默认值
 chrome.runtime.onInstalled.addListener(async (details) => {
   const defaults = {
@@ -95,7 +116,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     // ② HTML 降级（MHTML 不可用或失败时）
     if (savedFiles.length === 0) {
       try {
-        const htmlResponse = await chrome.tabs.sendMessage(tabId, { action: 'captureHtml' });
+        const htmlResponse = await tabsSendMsg(tabId, { action: 'captureHtml' });
         if (htmlResponse && htmlResponse.html) {
           const htmlBlob = new Blob(['\uFEFF' + htmlResponse.html], { type: 'text/html;charset=utf-8' });
           const htmlUrl = await _blobToDataUrl(htmlBlob);
@@ -118,7 +139,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     try {
       let debugData = null;
       try {
-        debugData = await chrome.tabs.sendMessage(tabId, { action: 'captureDebug' });
+        debugData = await tabsSendMsg(tabId, { action: 'captureDebug' });
       } catch (e) { /* sendMessage 可能超时 */ }
 
       // 兜底：如果收集失败，生成最小诊断
@@ -159,7 +180,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       : '';
     const msg = savedList + failedList;
     try {
-      await chrome.tabs.sendMessage(tabId, {
+      await tabsSendMsg(tabId, {
         action: 'savePageDone',
         success: savedFiles.length > 0,
         files: savedFiles.map(f => ({ name: baseFilename + f })),
@@ -177,7 +198,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   await chrome.storage.local.set({ mode: newState });
 
   try {
-    await chrome.tabs.sendMessage(tabId, {
+    await tabsSendMsg(tabId, {
       action: 'setMode',
       mode: newState
     });
@@ -208,7 +229,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       tabStates[tab.id] = msg.mode || 'off';
       await chrome.storage.local.set({ mode: msg.mode || 'off' });
       try {
-        await chrome.tabs.sendMessage(tab.id, {
+        await tabsSendMsg(tab.id, {
           action: 'setMode',
           mode: msg.mode || 'off'
         });
@@ -256,7 +277,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'showBankManager') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       try {
-        await chrome.tabs.sendMessage(tab.id, { action: 'showBankManager' });
+        await tabsSendMsg(tab.id, { action: 'showBankManager' });
       } catch(e) { /* ignore */ }
       sendResponse({ success: true });
     });
