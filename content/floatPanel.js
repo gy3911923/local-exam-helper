@@ -16,8 +16,9 @@ const FloatPanel = {
     const px = this._px;
     const style = document.createElement('style');
     style.textContent = `
-      #${px}_panel{position:fixed;right:16px;bottom:16px;width:320px;height:160px;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:2147483646;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#e8e8f0;font-size:13px;user-select:none;transition:opacity .2s}
-      .${px}_header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,.04);cursor:move;border-bottom:1px solid #2a2a3e}
+      #${px}_panel{position:fixed;right:16px;bottom:16px;width:320px;height:160px;background:rgba(26,26,46,.55);border:1px solid rgba(122,122,160,.3);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:2147483646;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#e8e8f0;font-size:13px;user-select:none;transition:opacity .2s}
+      @supports not ((backdrop-filter:blur(10px)) or (-webkit-backdrop-filter:blur(10px))){#${px}_panel{background:rgba(26,26,46,.85)}}
+      .${px}_header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,.08);cursor:move;border-bottom:1px solid rgba(122,122,160,.25)}
       .${px}_title{font-weight:600;font-size:13px}
       .${px}_status{font-size:11px;color:#64748b;background:rgba(100,116,139,.15);padding:2px 8px;border-radius:10px}
       .${px}_status_active{color:#10b981!important;background:rgba(16,185,129,.15)!important}

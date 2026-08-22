@@ -32,11 +32,43 @@ const QuestionFinder = {
     return questions;
   },
 
+  /**
+   * 收集答题 input，过滤"非题目区域"控件
+   * 场景：国网学堂页面底部计算器组件（十六进制/上档功能等按钮）带 radio/checkbox，
+   *       会被误识别成题目 → 只保留位于已知题目容器（.TMTitle/.question-steam/.el-radio-group 等）内的 input
+   * 安全回退：过滤后为空（未知系统/容器特征不符）→ 返回全部，避免误杀
+   */
+  _collectAnswerInputs(selector) {
+    const all = Helpers.safeQueryAll(selector);
+    if (all.length === 0) return all;
+    const QUESTION_AREA = [
+      'div[id^="tm_"]',            // 国网学堂题目容器 div#tm_N（含 .TMTitle+.TMContent）
+      '.el-radio-group',           // Element UI 单选组
+      '.el-checkbox-group',        // Element UI 多选组
+      '.selectAnswer',             // aqgk 选项区
+      '.question-panel-middle',    // 苏电e学堂考试页
+      '.examPaper_item',           // 苏电e学堂自测页
+      '.question-item',            // 通用题目容器
+      '.exam-question',
+      '[class*="question-item"]',
+      '[class*="examPaper"]'
+    ].join(',');
+    const inArea = all.filter(inp => {
+      let el = inp;
+      for (let d = 0; d < 12 && el; d++) {
+        if (el.nodeType === 1 && el.matches && el.matches(QUESTION_AREA)) return true;
+        el = el.parentElement;
+      }
+      return false;
+    });
+    return inArea.length > 0 ? inArea : all;
+  },
+
   // ========== 策略1: 表单回溯 ==========
 
   _strategyFormBacktrace() {
-    const radioInputs = Helpers.safeQueryAll('input[type="radio"]');
-    const checkboxInputs = Helpers.safeQueryAll('input[type="checkbox"]');
+    const radioInputs = this._collectAnswerInputs('input[type="radio"]');
+    const checkboxInputs = this._collectAnswerInputs('input[type="checkbox"]');
 
     if (radioInputs.length === 0 && checkboxInputs.length === 0) return [];
 
@@ -45,8 +77,11 @@ const QuestionFinder = {
     const radioGroups = hasNames
       ? this._groupByName(radioInputs)
       : this._groupByElWrapper(radioInputs, '.el-radio-group');
+    // 标准表单页面（hasNames=true）中，无 name 的 checkbox 多为干扰项
+    //（国网学堂"答案不确定"iTopicSign_* 标记、协议勾选等，非答题选项）→ 剔除
+    // Element UI 页面（hasNames=false）答题 checkbox 本就无 name → 不过滤
     const checkboxGroups = hasNames
-      ? this._groupByName(checkboxInputs)
+      ? this._groupByName(checkboxInputs.filter(inp => inp.getAttribute('name')))
       : this._groupByElWrapper(checkboxInputs, '.el-checkbox-group');
 
     const questions = [];
@@ -228,6 +263,8 @@ const QuestionFinder = {
       '[style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]'
     );
     hidden.forEach(el => el.remove());
+    // 删除题目签名行（国网学堂 .TMSign/.topic_table："第 N 题, 本小题 X 分(答案不确定)"）
+    clone.querySelectorAll('.TMSign, .topic_table').forEach(el => el.remove());
     // 删除所有含选项文字的元素
     //   苏电e学堂的 radio input 是 label 的兄弟节点(不在label里)
     //   旧逻辑只看 label>input 父子关系,漏了兄弟关系的 .radio-label / .item-details
@@ -287,14 +324,23 @@ const QuestionFinder = {
       }
 
       // 策略2: 标准 label[for] 关联（先去掉 iconfont 元素）
+      // 多个 label[for] 命中时（国网学堂：TMAnswer 字母列 + TMAnswerContent 选项列）：
+      // 只把"去掉字母前缀后仍有内容"的 label 视为真选项文本（排除 "A." 这类纯字母标签）
       if (!optionText && input.id) {
-        const label = Helpers.safeQuery(`label[for="${input.id}"]`, container);
-        if (label) {
+        const labels = Helpers.safeQueryAll(`label[for="${input.id}"]`, container);
+        let best = '', bestLen = -1;
+        for (const label of labels) {
           const lb = label.cloneNode(true);
           // 去除 iconfont + 混淆隐藏标签（display:none/opacity:0/font-size:0/visibility:hidden）
           lb.querySelectorAll('.iconfont, [class*="iconfont"], [style*="display:none"], [style*="display: none"], [style*="opacity:0"], [style*="opacity: 0"], [style*="font-size:0"], [style*="font-size: 0"], [style*="visibility:hidden"], [style*="visibility: hidden"]').forEach(el => el.remove());
-          optionText = (lb.textContent || '').trim();
+          const t = (lb.textContent || '').replace(/\s+/g, ' ').trim();
+          const stripped = t.replace(/^[A-H][\.\、\)）]?\s*/, '').trim();
+          if (stripped && stripped.length > bestLen) {
+            bestLen = stripped.length;
+            best = t;
+          }
         }
+        optionText = best;
       }
 
       // 策略3: 父元素文本回退
