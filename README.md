@@ -1,6 +1,6 @@
 # Local Exam Helper · 本地题库答题助手
 
-[![Version](https://img.shields.io/badge/version-1.13.5-brightgreen)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.13.6-brightgreen)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest%20V3-Chrome%2088+-green)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 
@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.13.6 | 悬浮窗白底黑字（贴合考试页白色底色，文字清晰；移除磨砂灰毛玻璃） |
 | v1.13.5 | 适配国网学堂（gwxt 标准表单：干扰勾选框过滤 · 双label选项提取 · 签名行剔除 · 计算器控件排除）· 悬浮窗半透明毛玻璃（backdrop-filter，含低版本降级） |
 | v1.13.x | 低版本 Chrome 兼容：`randomUUID` 回退 · `pageCapture` 存在性检查 · 支持 Chrome 88+ |
 | v1.12.x | 模式重构：标准=纯显示 / 后台=自动答题 · 答题间隙可配 · 题库管理全选/清空/覆盖/进度 · 性能优化（题库缓存+题目指纹）· 答案存疑判定修正 |

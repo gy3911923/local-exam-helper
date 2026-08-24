@@ -16,29 +16,28 @@ const FloatPanel = {
     const px = this._px;
     const style = document.createElement('style');
     style.textContent = `
-      #${px}_panel{position:fixed;right:16px;bottom:16px;width:320px;height:160px;background:rgba(26,26,46,.55);border:1px solid rgba(122,122,160,.3);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:2147483646;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#e8e8f0;font-size:13px;user-select:none;transition:opacity .2s}
-      @supports not ((backdrop-filter:blur(10px)) or (-webkit-backdrop-filter:blur(10px))){#${px}_panel{background:rgba(26,26,46,.85)}}
-      .${px}_header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,.08);cursor:move;border-bottom:1px solid rgba(122,122,160,.25)}
+      #${px}_panel{position:fixed;right:16px;bottom:16px;width:320px;height:160px;background:rgba(255,255,255,.96);border:1px solid rgba(0,0,0,.1);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:2147483646;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#1a1a2e;font-size:13px;user-select:none;transition:opacity .2s}
+      .${px}_header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(0,0,0,.03);cursor:move;border-bottom:1px solid rgba(0,0,0,.08)}
       .${px}_title{font-weight:600;font-size:13px}
-      .${px}_status{font-size:11px;color:#64748b;background:rgba(100,116,139,.15);padding:2px 8px;border-radius:10px}
-      .${px}_status_active{color:#10b981!important;background:rgba(16,185,129,.15)!important}
+      .${px}_status{font-size:11px;color:#6b7280;background:rgba(100,116,139,.12);padding:2px 8px;border-radius:10px}
+      .${px}_status_active{color:#059669!important;background:rgba(16,185,129,.12)!important}
       .${px}_body{padding:8px 12px;overflow-y:auto;height:calc(100% - 35px);pointer-events:none}
-      .${px}_placeholder{text-align:center;padding:20px 0;color:#64748b}
+      .${px}_placeholder{text-align:center;padding:20px 0;color:#6b7280}
       .${px}_placeholder p{margin:4px 0 0}
       .${px}_placeholder small{font-size:11px;opacity:.7;word-break:break-all}
-      .${px}_warn{color:#f59e0b;font-size:12px;font-weight:600;padding:4px 8px;background:rgba(245,158,11,.1);border-radius:6px;margin-bottom:8px}
-      .${px}_ok{color:#10b981;font-size:12px;padding:4px 8px;background:rgba(16,185,129,.1);border-radius:6px;margin-bottom:8px}
-      .${px}_result{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+      .${px}_warn{color:#b45309;font-size:12px;font-weight:600;padding:4px 8px;background:rgba(245,158,11,.12);border-radius:6px;margin-bottom:8px}
+      .${px}_ok{color:#059669;font-size:12px;padding:4px 8px;background:rgba(16,185,129,.12);border-radius:6px;margin-bottom:8px}
+      .${px}_result{padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}
       .${px}_result:last-child{border-bottom:none}
-      .${px}_stem{font-size:11px;color:#8890a0;line-height:1.4;margin-bottom:4px;word-break:break-all}
+      .${px}_stem{font-size:11px;color:#4b5563;line-height:1.4;margin-bottom:4px;word-break:break-all}
       .${px}_answer_row{display:flex;align-items:center;justify-content:space-between}
       .${px}_answer{font-size:14px;font-weight:700}
       .${px}_score{font-size:11px;font-weight:600;padding:1px 6px;border-radius:8px}
-      .${px}_options{font-size:11px;color:#64748b;margin-top:2px;word-break:break-all}
-      .${px}_opt_answer{color:#10b981;font-weight:600}
-      .${px}_opt{color:#64748b}
-      .${px}_analysis{font-size:11px;color:#94a3b8;margin-top:2px;border-left:2px solid #334155;padding-left:6px;word-break:break-all}
-      .${px}_resize{position:absolute;bottom:2px;right:2px;width:16px;height:16px;cursor:nwse-resize;pointer-events:auto;background:linear-gradient(135deg,transparent 50%,#334155 50%);border-radius:0 0 8px 0}
+      .${px}_options{font-size:11px;color:#6b7280;margin-top:2px;word-break:break-all}
+      .${px}_opt_answer{color:#059669;font-weight:600}
+      .${px}_opt{color:#6b7280}
+      .${px}_analysis{font-size:11px;color:#4b5563;margin-top:2px;border-left:2px solid #d1d5db;padding-left:6px;word-break:break-all}
+      .${px}_resize{position:absolute;bottom:2px;right:2px;width:16px;height:16px;cursor:nwse-resize;pointer-events:auto;background:linear-gradient(135deg,transparent 50%,#9ca3af 50%);border-radius:0 0 8px 0}
     `;
     document.head.appendChild(style);
     this._cssInjected = true;
@@ -241,7 +240,7 @@ const FloatPanel = {
 
     const best = results[0];
     const scorePct = Math.round(best.score * 100);
-    const scoreColor = scorePct >= 80 ? '#10b981' : (scorePct >= 60 ? '#f59e0b' : '#ef4444');
+    const scoreColor = scorePct >= 80 ? '#059669' : (scorePct >= 60 ? '#d97706' : '#dc2626');
 
     let html = '';
 
@@ -261,7 +260,7 @@ const FloatPanel = {
         <div class="${px}_result">
           <div class="${px}_stem">${this._esc(r.stemText)}</div>
           <div class="${px}_answer_row">
-            <span class="${px}_answer" style="color:${i===0 ? scoreColor : '#8890a0'}">
+            <span class="${px}_answer" style="color:${i===0 ? scoreColor : '#4b5563'}">
               ${i===0 ? '⭐' : '··'} 答案: ${this._formatAnswer(r.answer, r.options)}
             </span>
             <span class="${px}_score" style="background:${scoreColor}22;color:${scoreColor}">
@@ -270,7 +269,7 @@ const FloatPanel = {
           </div>
           ${r.options && Object.keys(r.options).length > 0
             ? `<div class="${px}_options">${this._formatOptions(r.options, r.answer)}</div>`
-            : `<div class="${px}_options" style="color:#94a3b8;font-style:italic">（题库选项数据不完整）</div>`}
+            : `<div class="${px}_options" style="color:#6b7280;font-style:italic">（题库选项数据不完整）</div>`}
           ${r.analysis ? `<div class="${px}_analysis">${this._esc(r.analysis)}</div>` : ''}
         </div>`;
     });
