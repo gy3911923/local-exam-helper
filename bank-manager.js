@@ -99,6 +99,7 @@ async function loadBanks() {
   } catch(e) {
     console.error('加载题库失败:', e);
     setLoadError(e);
+    throw e;  // 让调用方（导入流程等）感知刷新失败，避免静默吞错
   }
 }
 
@@ -227,7 +228,10 @@ async function handleImport(e) {
 
           const prepared = prepareQuestions(candidate.questions);
           if (prepared.length === 0) {
-            throw new Error('解析结果为空，或题目缺少题干字段');
+            const sample = Array.isArray(candidate.questions) && candidate.questions.length > 0
+              ? `；题目字段: ${JSON.stringify(Object.keys(candidate.questions[0] || {}))}`
+              : '';
+            throw new Error('解析结果为空，或题目缺少题干字段（需 question/stem/stemText 字段）' + sample);
           }
 
           const unique = deduplicate(prepared);
@@ -267,7 +271,13 @@ async function handleImport(e) {
     if (success > 0) {
       await chrome.storage.local.set({ activeBanks: [...activeIds] });
     }
-    await loadBanks();
+    try {
+      await loadBanks();
+    } catch (err) {
+      // 保存成功但列表刷新失败：单独列出，不当作导入失败
+      errors.push('题库列表刷新失败（题库已保存）: ' + (err.message || '未知错误'));
+      console.error('导入后刷新列表失败:', err);
+    }
   } catch (err) {
     failed += 1;
     errors.push(err.message || '导入流程失败');
@@ -385,11 +395,50 @@ function normalizeOptions(rawOptions) {
   ]));
 }
 
+/**
+ * 读取文件为 ArrayBuffer：优先 file.arrayBuffer()（Chrome 76+），旧版回退 FileReader
+ */
+function readFileBuffer(file) {
+  if (typeof file.arrayBuffer === 'function') {
+    try { return file.arrayBuffer(); } catch(e) { /* 回退 FileReader */ }
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * 解析 JSON 字节（兼容 BOM / GBK 编码，Windows 记事本/Excel 另存常见）
+ * 处理顺序：UTF-8 → GBK，均失败时报编码提示
+ */
+async function parseJSONBuffer(buffer) {
+  // 尝试 UTF-8（去 BOM）
+  try {
+    const utf8 = new TextDecoder('utf-8').decode(buffer).replace(/^\ufeff/, '');
+    return JSON.parse(utf8);
+  } catch (e1) { /* 继续尝试 GBK */ }
+  // 尝试 GBK（TextDecoder 原生支持 'gbk'，Chrome 38+）
+  try {
+    const gbk = new TextDecoder('gbk').decode(buffer).replace(/^\ufeff/, '');
+    return JSON.parse(gbk);
+  } catch (e2) { /* 均失败 */ }
+  // 错误增强：检测 UTF-8 解码是否出现乱码符
+  const utf8Raw = new TextDecoder('utf-8').decode(buffer);
+  const mojibake = /[\uFFFD]{3,}/.test(utf8Raw);
+  const hint = mojibake
+    ? '（文件疑似非 UTF-8 编码，请在记事本中「另存为」选择 UTF-8 后重试）'
+    : '（请确认文件是有效的 JSON 格式）';
+  throw new Error(`JSON 解析失败${hint}`);
+}
+
 async function parseFile(file) {
   const name = String(file.name || '').toLowerCase();
   if (name.endsWith('.json')) {
-    const text = await file.text();
-    const json = JSON.parse(text);
+    const buffer = await readFileBuffer(file);
+    const json = await parseJSONBuffer(buffer);
     if (Array.isArray(json.banks)) {
       return { kind: 'backup', banks: json.banks };
     }
@@ -604,4 +653,4 @@ async function deleteAll() {
   }
 }
 
-loadBanks();
+loadBanks().catch(() => { /* 错误已由 setLoadError 展示 */ });
