@@ -50,6 +50,36 @@ const Helpers = {
     return s;
   },
 
+  /**
+   * 兼容低版本 Chrome 的 chrome.storage.local.get 包装
+   * Chrome 95 之前 chrome.storage 不返回 Promise → await 拿到 undefined
+   * 用 callback 形式 + Promise 包装，所有版本通用（与 sendMessage 同套路）
+   */
+  storageGet(keys) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(keys, (result) => {
+          if (chrome.runtime.lastError) { resolve({}); return; }
+          resolve(result);
+        });
+      } catch(e) { resolve({}); }
+    });
+  },
+
+  /**
+   * 兼容低版本 Chrome 的 chrome.storage.local.set 包装
+   */
+  storageSet(obj) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.set(obj, () => {
+          if (chrome.runtime.lastError) { resolve(false); return; }
+          resolve(true);
+        });
+      } catch(e) { resolve(false); }
+    });
+  },
+
   /** 防抖 */
   debounce(fn, delay = 300) {
     let timer;

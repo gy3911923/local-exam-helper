@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * bank-manager.js - 独立题库管理页面逻辑
  * 直接与 background service worker 通信，不依赖 content script
@@ -93,7 +107,7 @@ async function loadBanks() {
     const response = await sendMsg({ action: 'getAllBanks' });
     if (!Array.isArray(response)) throw new Error('后台返回的题库数据格式无效');
     banks = response;
-    const config = await chrome.storage.local.get(['activeBanks']);
+    const config = await storageGet(['activeBanks']);
     activeIds = new Set(Array.isArray(config.activeBanks) ? config.activeBanks : []);
     renderList();
   } catch(e) {
@@ -138,7 +152,7 @@ function renderList() {
       if (cb.checked) activeIds.add(cb.dataset.id);
       else activeIds.delete(cb.dataset.id);
       try {
-        await chrome.storage.local.set({ activeBanks: [...activeIds] });
+        await storageSet({ activeBanks: [...activeIds] });
         renderList();
       } catch (e) {
         toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
@@ -154,7 +168,7 @@ function renderList() {
         const result = await sendMsg({ action: 'deleteBank', bankId: btn.dataset.id });
         if (!result || result.success !== true) throw new Error('后台删除失败');
         activeIds.delete(btn.dataset.id);
-        await chrome.storage.local.set({ activeBanks: [...activeIds] });
+        await storageSet({ activeBanks: [...activeIds] });
         await loadBanks();
         toast('已删除');
       } catch (e) {
@@ -168,7 +182,7 @@ function renderList() {
 async function saveAndClose() {
   try {
     const checked = [...$list.querySelectorAll('.bank-check:checked')].map(cb => cb.dataset.id);
-    await chrome.storage.local.set({ activeBanks: checked });
+    await storageSet({ activeBanks: checked });
     window.close();
   } catch (e) {
     toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
@@ -269,7 +283,7 @@ async function handleImport(e) {
 
     // 导入成功的题库默认激活；失败文件不会污染激活列表
     if (success > 0) {
-      await chrome.storage.local.set({ activeBanks: [...activeIds] });
+      await storageSet({ activeBanks: [...activeIds] });
     }
     try {
       await loadBanks();
@@ -624,7 +638,7 @@ async function selectAll() {
     banks.forEach(b => activeIds.add(b.id));
   }
   try {
-    await chrome.storage.local.set({ activeBanks: [...activeIds] });
+    await storageSet({ activeBanks: [...activeIds] });
     renderList();
   } catch (e) {
     toast('保存激活状态失败: ' + (e.message || '未知错误'), 'error');
@@ -641,7 +655,7 @@ async function deleteAll() {
     await Promise.all(banks.map(bank =>
       sendMsg({ action: 'deleteBank', bankId: bank.id })
     ));
-    await chrome.storage.local.set({ activeBanks: [] });
+    await storageSet({ activeBanks: [] });
     activeIds.clear();
     await loadBanks();
     toast('已清空全部题库');

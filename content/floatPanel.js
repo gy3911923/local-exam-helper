@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * floatPanel.js - 悬浮窗组件
  * 依赖：utils/common.js
@@ -205,7 +219,7 @@ const FloatPanel = {
   async _restorePosition() {
     if (!this._panel) return;
     try {
-      const data = await chrome.storage.local.get(['floatPanelPos', 'floatPanelSize']);
+      const data = await storageGet(['floatPanelPos', 'floatPanelSize']);
       const pos = data.floatPanelPos || {};
       const size = data.floatPanelSize || { w: 320, h: 160 };
 

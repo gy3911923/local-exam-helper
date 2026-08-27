@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * background.js - Service Worker
  * 职责：快捷键监听、三态管理(off/normal/stealth)、tab消息中转
@@ -37,10 +51,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     floatPanelPos: { x: null, y: null },
     floatPanelSize: { w: 320, h: 160 }
   };
-  const current = await chrome.storage.local.get(null);
+  const current = await storageGet(null);
   for (const [k, v] of Object.entries(defaults)) {
     if (!(k in current)) {
-      await chrome.storage.local.set({ [k]: v });
+      await storageSet({ [k]: v });
     }
   }
 
@@ -195,7 +209,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 
   tabStates[tabId] = newState;
-  await chrome.storage.local.set({ mode: newState });
+  await storageSet({ mode: newState });
 
   try {
     await tabsSendMsg(tabId, {
@@ -212,7 +226,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'getState') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       const mode = tabStates[tab.id] || 'off';
-      const config = await chrome.storage.local.get(['matchThreshold', 'activeBanks', 'autoMode']);
+      const config = await storageGet(['matchThreshold', 'activeBanks', 'autoMode']);
       sendResponse({
         mode,
         enabled: mode !== 'off',
@@ -227,7 +241,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'setMode') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       tabStates[tab.id] = msg.mode || 'off';
-      await chrome.storage.local.set({ mode: msg.mode || 'off' });
+      await storageSet({ mode: msg.mode || 'off' });
       try {
         await tabsSendMsg(tab.id, {
           action: 'setMode',

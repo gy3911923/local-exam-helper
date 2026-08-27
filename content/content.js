@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * content.js - 主控入口
  * 依赖：所有content/模块
@@ -32,7 +46,7 @@ const ExamHelper = {
     // 进考试页后按 Ctrl+Shift+E 进普通模式 / Ctrl+Shift+H 进后台模式
     // 快捷键是浏览器级能力，与网址无关——任何页面按都生效，无需域名白名单
     try {
-      const config = await chrome.storage.local.get(['matchThreshold', 'autoMode']);
+      const config = await storageGet(['matchThreshold', 'autoMode']);
       this._answerMode = config.autoMode || 'auto';
     } catch(e) { /* ignore */ }
 
@@ -99,7 +113,7 @@ const ExamHelper = {
     // 读取用户配置的答题间隙（秒），默认 5 秒
     let delaySec = 5;
     try {
-      const config = await chrome.storage.local.get(['stealthDelay']);
+      const config = await storageGet(['stealthDelay']);
       const parsed = Number(config.stealthDelay);
       if (parsed > 0 && parsed <= 60) delaySec = parsed;
     } catch(e) { /* ignore */ }
@@ -176,7 +190,7 @@ const ExamHelper = {
   /** 加载激活题库 */
   async _loadBanks() {
     try {
-      const config = await chrome.storage.local.get(['activeBanks', 'bankPriorities']);
+      const config = await storageGet(['activeBanks', 'bankPriorities']);
       const activeIds = config.activeBanks || [];
       const version = activeIds.sort().join(',');
 
@@ -512,7 +526,7 @@ const ExamHelper = {
   /** 获取配置的阈值 */
   async _getThreshold() {
     try {
-      const config = await chrome.storage.local.get(['matchThreshold']);
+      const config = await storageGet(['matchThreshold']);
       return config.matchThreshold || 0.6;
     } catch(e) {
       return 0.7;

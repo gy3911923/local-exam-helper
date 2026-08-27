@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * popup.js - 纯状态展示（无交互控件，防失焦误触）
  */
@@ -34,7 +48,7 @@ async function refreshUI() {
     });
 
     // 兜底：getState 失败时退回 storage 读取
-    const config = state ? state : await chrome.storage.local.get([
+    const config = state ? state : await storageGet([
       'mode', 'activeBanks', 'autoMode', 'matchThreshold', 'stealthDelay'
     ]);
 

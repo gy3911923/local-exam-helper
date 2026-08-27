@@ -1,3 +1,17 @@
+// 兼容低版本 Chrome（<95）的 chrome.storage 包装（chrome.storage Promise 在 95+）
+function storageGet(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.get(keys, (r) => { if (chrome.runtime.lastError) resolve({}); else resolve(r); }); }
+    catch(e) { resolve({}); }
+  });
+}
+function storageSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { if (chrome.runtime.lastError) resolve(false); else resolve(true); }); }
+    catch(e) { resolve(false); }
+  });
+}
+
 /**
  * bankManager.js - 题库管理面板（页面内模态框）
  * 依赖：utils/db.js, utils/textNormalize.js
@@ -142,7 +156,7 @@ const BankManager = {
   async _refreshList() {
     const px = this._px;
     try {
-      const saved = await chrome.storage.local.get(['activeBanks']);
+      const saved = await storageGet(['activeBanks']);
       const activeIds = new Set(saved.activeBanks || []);
 
       // 从background获取题库
@@ -183,14 +197,14 @@ const BankManager = {
 
   /** 切换激活状态(即时生效) */
   async _toggleActive(bankId, checked) {
-    const saved = await chrome.storage.local.get(['activeBanks']);
+    const saved = await storageGet(['activeBanks']);
     let activeIds = saved.activeBanks || [];
     if (checked) {
       if (!activeIds.includes(bankId)) activeIds.push(bankId);
     } else {
       activeIds = activeIds.filter(id => id !== bankId);
     }
-    await chrome.storage.local.set({ activeBanks: activeIds });
+    await storageSet({ activeBanks: activeIds });
   },
 
   /** 保存激活状态 */
@@ -204,7 +218,7 @@ const BankManager = {
         if (item) activeIds.push(item.dataset.id);
       }
     });
-    await chrome.storage.local.set({ activeBanks: activeIds });
+    await storageSet({ activeBanks: activeIds });
     this.hide();
   },
 
@@ -435,7 +449,7 @@ const BankManager = {
 
   /** 全选/取消全选题库 */
   async _selectAll() {
-    const saved = await chrome.storage.local.get(['activeBanks']);
+    const saved = await storageGet(['activeBanks']);
     const activeIds = saved.activeBanks || [];
     const currentIds = this._banks.map(b => b.id);
     const allActive = currentIds.every(id => activeIds.includes(id));
@@ -443,11 +457,11 @@ const BankManager = {
     if (allActive) {
       // 全取消
       const newIds = activeIds.filter(id => !currentIds.includes(id));
-      await chrome.storage.local.set({ activeBanks: newIds });
+      await storageSet({ activeBanks: newIds });
     } else {
       // 全选中
       const newIds = [...new Set([...activeIds, ...currentIds])];
-      await chrome.storage.local.set({ activeBanks: newIds });
+      await storageSet({ activeBanks: newIds });
     }
     await this._refreshList();
   },
@@ -463,7 +477,7 @@ const BankManager = {
     for (const bank of this._banks) {
       await Helpers.sendMessage({ action: 'deleteBank', bankId: bank.id });
     }
-    await chrome.storage.local.set({ activeBanks: [] });
+    await storageSet({ activeBanks: [] });
     await this._refreshList();
   },
 

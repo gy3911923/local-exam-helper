@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.13.8 | chrome.storage Promise 兼容（chrome.storage Promise 95+ 才支持，此前 88-94 全中招——loadBanks/导入/激活态全坏，由同事实测 Chrome 91 暴露）。29 处 await chrome.storage 改 callback 包装 |
 | v1.13.7 | 题库导入健壮性：JSON 兼容 BOM/GBK 编码（Windows 记事本另存常见）· file.arrayBuffer 旧版回退 · 错误提示增强（编码/字段定位）· 列表刷新失败不再静默吞错 |
 | v1.13.6 | 悬浮窗白底黑字（贴合考试页白色底色，文字清晰；移除磨砂灰毛玻璃） |
 | v1.13.5 | 适配国网学堂（gwxt 标准表单：干扰勾选框过滤 · 双label选项提取 · 签名行剔除 · 计算器控件排除）· 悬浮窗半透明毛玻璃（backdrop-filter，含低版本降级） |
