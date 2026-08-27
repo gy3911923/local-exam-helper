@@ -536,7 +536,7 @@ const ExamHelper = {
   /** 设置模式 */
   setMode(mode) {
     this._mode = mode;
-    chrome.storage.local.set({ autoMode: mode });
+    storageSet({ autoMode: mode });
   },
 
   /** 收集诊断数据（同步方法，分模块独立容错） */

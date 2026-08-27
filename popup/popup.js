@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     delayInput.addEventListener('change', () => {
       const val = Math.max(1, Math.min(60, Number(delayInput.value) || 5));
       delayInput.value = val;
-      chrome.storage.local.set({ stealthDelay: val });
+      storageSet({ stealthDelay: val });
     });
   }
 });

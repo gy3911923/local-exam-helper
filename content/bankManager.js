@@ -429,19 +429,20 @@ const BankManager = {
   /** 通过background保存题库,并自动加入 activeBanks 让其立刻可用 */
   async _saveBank(bank) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: 'saveBank', bank }, (response) => {
+      chrome.runtime.sendMessage({ action: 'saveBank', bank }, async (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
-        // 导入即激活
-        chrome.storage.local.get(['activeBanks']).then((saved) => {
+        try {
+          // 导入即激活（用 callback 包装，Chrome 88-94 下 storage Promise 不可用）
+          const saved = await storageGet(['activeBanks']);
           const activeIds = saved.activeBanks || [];
           if (!activeIds.includes(bank.id)) {
             activeIds.push(bank.id);
-            chrome.storage.local.set({ activeBanks: activeIds });
+            await storageSet({ activeBanks: activeIds });
           }
-        }).catch(() => {});
+        } catch(e) { /* 激活失败不影响保存结果 */ }
         resolve(response);
       });
     });

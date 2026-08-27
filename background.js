@@ -272,14 +272,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === 'saveConfig') {
-    chrome.storage.local.set(msg.config).then(() => {
+    storageSet(msg.config).then(() => {
       sendResponse({ success: true });
     });
     return true;
   }
 
   if (msg.action === 'getConfig') {
-    chrome.storage.local.get(null).then(config => {
+    storageGet(null).then(config => {
       sendResponse(config);
     });
     return true;

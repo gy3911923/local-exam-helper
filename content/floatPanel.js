@@ -209,10 +209,11 @@ const FloatPanel = {
   _savePosition() {
     if (!this._panel) return;
     const rect = this._panel.getBoundingClientRect();
-    chrome.storage.local.set({
+    // 用 storageSet 包装（Chrome 88-94 下 storage Promise 不可用，.catch 链会 TypeError）
+    storageSet({
       floatPanelPos: { x: rect.left, y: rect.top },
       floatPanelSize: { w: rect.width, h: rect.height }
-    }).catch(() => {});
+    });
   },
 
   /** 恢复位置 */

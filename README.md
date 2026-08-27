@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.13.10 | Marvis 审查补漏：`.then()/.catch()` 链式 chrome API 调用（此前审计只扫了 await 形式漏了链式）。修复 5 处：content/bankManager 导入即激活（真实回归）· background saveConfig/getConfig · floatPanel 位置保存（.catch 链）· popup stealthDelay。至此 await + .then + .catch + 裸调用全口径清零 |
 | v1.13.9 | 兼容审计补漏：background 剩余 6 处裸 await chrome.*（commands 96+ / pageCapture 99+ / downloads 102+ / tabs.query）改通用 chromeApi callback 包装。至此全项目裸 await chrome.* 清零，Chrome 88+ 全覆盖 |
 | v1.13.8 | chrome.storage Promise 兼容（chrome.storage Promise 95+ 才支持，此前 88-94 全中招——loadBanks/导入/激活态全坏，由同事实测 Chrome 91 暴露）。29 处 await chrome.storage 改 callback 包装 |
 | v1.13.7 | 题库导入健壮性：JSON 兼容 BOM/GBK 编码（Windows 记事本另存常见）· file.arrayBuffer 旧版回退 · 错误提示增强（编码/字段定位）· 列表刷新失败不再静默吞错 |
