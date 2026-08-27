@@ -13,6 +13,24 @@ function storageSet(obj) {
 }
 
 /**
+ * 通用 chrome API callback 包装（commands/tabs/pageCapture/downloads 等 Promise 支持版本不一：
+ * commands 96+ / pageCapture 99+ / downloads 102+，Chrome 88-101 均需 callback 形式）
+ */
+function chromeApi(method, ...args) {
+  return new Promise((resolve, reject) => {
+    try {
+      method(...args, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(result);
+      });
+    } catch(e) { reject(e); }
+  });
+}
+
+/**
  * background.js - Service Worker
  * 职责：快捷键监听、三态管理(off/normal/stealth)、tab消息中转
  */
@@ -60,7 +78,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
   // 检查快捷键是否已绑定（首次安装时）
   try {
-    const commands = await chrome.commands.getAll();
+    const commands = await chromeApi(chrome.commands.getAll);
     const unbound = commands.filter(c => !c.shortcut);
     if (unbound.length > 0) {
       console.warn('[答题助手] 以下快捷键未绑定，请到 chrome://extensions/shortcuts 设置：',
@@ -85,7 +103,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   // 快捷键正常触发 → 清除安装提醒徽章
   chrome.action.setBadgeText({ text: '' });
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chromeApi(chrome.tabs.query, { active: true, currentWindow: true });
   if (!tab) return;
   const tabId = tab.id;
   const current = tabStates[tabId] || 'off';
@@ -111,9 +129,9 @@ chrome.commands.onCommand.addListener(async (command) => {
     //    低版本 Chrome 可能无 pageCapture API → 存在性检查后降级 HTML
     if (chrome.pageCapture && typeof chrome.pageCapture.saveAsMHTML === 'function') {
       try {
-        const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId });
+        const mhtmlBlob = await chromeApi(chrome.pageCapture.saveAsMHTML, { tabId });
         const mhtmlUrl = await _blobToDataUrl(mhtmlBlob);
-        await chrome.downloads.download({
+        await chromeApi(chrome.downloads.download, {
           url: mhtmlUrl,
           filename: baseFilename + '.mhtml',
           saveAs: false
@@ -134,7 +152,7 @@ chrome.commands.onCommand.addListener(async (command) => {
         if (htmlResponse && htmlResponse.html) {
           const htmlBlob = new Blob(['\uFEFF' + htmlResponse.html], { type: 'text/html;charset=utf-8' });
           const htmlUrl = await _blobToDataUrl(htmlBlob);
-          await chrome.downloads.download({
+          await chromeApi(chrome.downloads.download, {
             url: htmlUrl,
             filename: baseFilename + '.html',
             saveAs: false
@@ -175,7 +193,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       const debugJson = JSON.stringify(debugData, null, 2);
       const debugBlob = new Blob([debugJson], { type: 'application/json;charset=utf-8' });
       const debugUrl = await _blobToDataUrl(debugBlob);
-      await chrome.downloads.download({
+      await chromeApi(chrome.downloads.download, {
         url: debugUrl,
         filename: baseFilename + '_debug.json',
         saveAs: false
