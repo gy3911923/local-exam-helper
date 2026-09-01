@@ -122,6 +122,9 @@ const ExamHelper = {
     const minMs = Math.max(1000, Math.round(delaySec * 900));
     const maxMs = Math.max(minMs + 1, Math.round(delaySec * 1100));
     await this._autoAnswerStealth(minMs, maxMs);
+
+    // 隐形模式同样监听页面变化（切科目/重开弹窗时重新扫描并作答）
+    this._startObserver();
   },
 
   /**
@@ -238,17 +241,28 @@ const ExamHelper = {
     }
     this._questionsFingerprint = fingerprint;
 
+    // 题目集已变化（切科目/翻页/重开弹窗）→ 解除 hover 绑定锁，
+    // 让 _bindHoverEvents 重新绑定到新题目的 DOM 上；同时清空作答记录，
+    // 避免同题干跨科目残留导致新题被误判为已答
+    this._hoverBound = false;
+    this._answeredQuestions.clear();
+
     // 匹配
     const threshold = await this._getThreshold();
     this._matchResults = Matcher.matchAll(this._questions, this._banks, threshold);
 
-    // 仅普通模式显示悬浮窗（首次绑定，后续只更新状态）
+    // 仅普通模式显示悬浮窗（题目集变化时重新绑定，否则仅更新状态）
     if (this._mode === 'normal') {
       FloatPanel.updateStatus(true, this._banks.length);
       if (!this._hoverBound) {
         this._bindHoverEvents();
         this._hoverBound = true;
       }
+    }
+
+    // 隐形模式：题目集变化（切科目/重开弹窗）→ 对新增未答题目自动作答
+    if (this._mode === 'stealth') {
+      this._autoAnswerStealth(2000, 5000).catch(() => {});
     }
   },
 

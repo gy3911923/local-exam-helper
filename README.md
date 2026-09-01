@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.13.11 | 修复科目切换（SPA el-dialog 弹窗）失效：①普通模式题目集指纹变化时重置 `_hoverBound` 并重新绑定新题 hover 悬浮窗（此前 `_hoverBound` 置 true 后永不重置，切科目后新题悬浮窗不展示）②隐形模式补 `_startObserver()` 监听页面变化，切科目自动重扫并作答（此前仅一次性扫描，切科目完全不感知）③题目集变化时清空 `_answeredQuestions`，避免同题干跨科目误判已答。回归：新增 `regress_subject_switch.js` 双科目 el-dialog 切换测试，4 项全 PASS |
 | v1.13.10 | Marvis 审查补漏：`.then()/.catch()` 链式 chrome API 调用（此前审计只扫了 await 形式漏了链式）。修复 5 处：content/bankManager 导入即激活（真实回归）· background saveConfig/getConfig · floatPanel 位置保存（.catch 链）· popup stealthDelay。至此 await + .then + .catch + 裸调用全口径清零 |
 | v1.13.9 | 兼容审计补漏：background 剩余 6 处裸 await chrome.*（commands 96+ / pageCapture 99+ / downloads 102+ / tabs.query）改通用 chromeApi callback 包装。至此全项目裸 await chrome.* 清零，Chrome 88+ 全覆盖 |
 | v1.13.8 | chrome.storage Promise 兼容（chrome.storage Promise 95+ 才支持，此前 88-94 全中招——loadBanks/导入/激活态全坏，由同事实测 Chrome 91 暴露）。29 处 await chrome.storage 改 callback 包装 |
