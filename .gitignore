@@ -6,3 +6,5 @@ AGENTS.md
 CLAUDE.md
 .cairn/
 test/
+clean_docx_bank.py
+cleaned_banks/
