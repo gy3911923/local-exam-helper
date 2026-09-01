@@ -35,6 +35,7 @@ const ExamHelper = {
   _correctedQuestions: new Set(), // 已纠错的题目，避免重复计数
   _hoverBound: false, // 防止 MutationObserver 重绑事件
   _stealthRunning: false, // 隐形作答并发锁：防止多循环对同一题重复点击
+  _stealthEpoch: 0, // 隐形作答会话代次：指纹变化时 ++，使旧循环在 await 醒来后自愈退出，杜绝残余并发窗口
   _banksVersion: null, // 题库版本标记，避免每次重扫都走 IndexedDB
   _questionsFingerprint: null, // 题目集指纹，题目没变时跳过 matchAll
 
@@ -136,10 +137,16 @@ const ExamHelper = {
     // （checkbox 多选重复 _toggleOption 会取消已选项；单选虽安全但没必要叠加）
     if (this._stealthRunning) return;
     this._stealthRunning = true;
+    // 会话代次：捕获当前代次。指纹变化会 ++，本循环在任意 await 醒来后若发现
+    // 代次已变（题目集已切换、新一轮作答已接管），立即退出，杜绝残余并发窗口
+    // （旧循环 sleep 期间强制释放锁 + 启动新循环后，旧循环仍会继续点击的隐患）
+    const epoch = this._stealthEpoch;
     try {
       for (const mr of this._matchResults) {
         // 模式已切换（normal/off）→ 立即停止隐形模式作答
         if (this._mode !== 'stealth') return;
+        // 会话代次已变（切科目/重扫启动了新一轮作答）→ 让位于新循环，立即退出
+        if (this._stealthEpoch !== epoch) return;
 
         const q = mr.question;
         if (!q.inputElements || q.inputElements.length === 0) continue;
@@ -168,6 +175,8 @@ const ExamHelper = {
           await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
           // sleep 期间用户可能切换了模式 → 放弃本次点击
           if (this._mode !== 'stealth') return;
+          // sleep 期间题目集可能已切换（指纹变化 ++）→ 让位于新循环
+          if (this._stealthEpoch !== epoch) return;
           try {
             const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
             await this._selectAnswers(q, mr.bestAnswer, bankOptions);
@@ -256,6 +265,10 @@ const ExamHelper = {
     // 保证切科目后新一轮作答循环能正常启动（旧循环可能仍卡在 sleep 中）
     this._hoverBound = false;
     this._answeredQuestions.clear();
+    // 会话代次 ++：使所有正在运行（含 sleep 挂起中）的旧作答循环在 await 醒来后
+    // 检测到代次不匹配而立即退出，杜绝"强制释放锁 + 启动新循环后旧循环仍点击"的
+    // 残余并发窗口（checkbox 多选会被二次 _toggleOption 取消 → 漏答）
+    this._stealthEpoch++;
     this._stealthRunning = false;
 
     // 匹配

@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.13.13 | 修复残余并发窗口（Marvis 最终复核 REJECT 项）：v1.13.12 的并发锁在"指纹变化强制释放锁 + 启动新循环"时序下仍有漏洞——旧作答循环 sleep 醒来只检查 `_mode` 不检查锁，仍会继续 `_selectAnswers`，与清空 `_answeredQuestions` 后的新循环对同一批 checkbox 重复 `_toggleOption` 取消已选项→漏答。引入会话代次 `_stealthEpoch`：指纹变化时 `++`，`_autoAnswerStealth` 进入时捕获当前代次，每次 `await` 醒来后检测代次不匹配即 return 自杀让位于新循环，从根上堵死残余并发窗口。新增 `regress_concurrency_epoch.js` 实测旧循环 sleep 期间指纹变化场景：旧代次点击=0、代次 1→2 递增、锁最终释放，5 项全 PASS；科目切换回归 4 项 + 三系统识别 20/90/100 题全绿 |
 | v1.13.12 | 隐形作答并发锁：给 `_autoAnswerStealth` 加运行中标志（`_stealthRunning`），多循环并发时仅第一个执行，防止弹窗渐进渲染触发多次扫描时对同一题重复点击（checkbox 多选重复 `_toggleOption` 会取消已选项）；切科目清空作答记录时同步释放锁，保证新一轮作答能启动。修复经 jsdom 并发验证（并发两次仅一次执行，锁正常释放）。解决 Marvis 审查指出的"无作答并发锁"风险 |
 | v1.13.11 | 修复科目切换（SPA el-dialog 弹窗）失效：①普通模式题目集指纹变化时重置 `_hoverBound` 并重新绑定新题 hover 悬浮窗（此前 `_hoverBound` 置 true 后永不重置，切科目后新题悬浮窗不展示）②隐形模式补 `_startObserver()` 监听页面变化，切科目自动重扫并作答（此前仅一次性扫描，切科目完全不感知）③题目集变化时清空 `_answeredQuestions`，避免同题干跨科目误判已答。回归：新增 `regress_subject_switch.js` 双科目 el-dialog 切换测试，4 项全 PASS |
 | v1.13.10 | Marvis 审查补漏：`.then()/.catch()` 链式 chrome API 调用（此前审计只扫了 await 形式漏了链式）。修复 5 处：content/bankManager 导入即激活（真实回归）· background saveConfig/getConfig · floatPanel 位置保存（.catch 链）· popup stealthDelay。至此 await + .then + .catch + 裸调用全口径清零 |
