@@ -34,6 +34,7 @@ const ExamHelper = {
   _answeredQuestions: new Set(), // 已作答的题目stem文本哈希，避免重复作答
   _correctedQuestions: new Set(), // 已纠错的题目，避免重复计数
   _hoverBound: false, // 防止 MutationObserver 重绑事件
+  _stealthRunning: false, // 隐形作答并发锁：防止多循环对同一题重复点击
   _banksVersion: null, // 题库版本标记，避免每次重扫都走 IndexedDB
   _questionsFingerprint: null, // 题目集指纹，题目没变时跳过 matchAll
 
@@ -131,45 +132,53 @@ const ExamHelper = {
    * 隐形模式作答：逐题回答，每题间隔随机延迟
    */
   async _autoAnswerStealth(minDelay = 2000, maxDelay = 5000) {
-    for (const mr of this._matchResults) {
-      // 模式已切换（normal/off）→ 立即停止隐形模式作答
-      if (this._mode !== 'stealth') return;
+    // 并发锁：已有作答循环在运行则跳过，避免多循环对同一题重复点击
+    // （checkbox 多选重复 _toggleOption 会取消已选项；单选虽安全但没必要叠加）
+    if (this._stealthRunning) return;
+    this._stealthRunning = true;
+    try {
+      for (const mr of this._matchResults) {
+        // 模式已切换（normal/off）→ 立即停止隐形模式作答
+        if (this._mode !== 'stealth') return;
 
-      const q = mr.question;
-      if (!q.inputElements || q.inputElements.length === 0) continue;
+        const q = mr.question;
+        if (!q.inputElements || q.inputElements.length === 0) continue;
 
-      const key = q.normalizedStem || q.stemText;
-      if (this._answeredQuestions.has(key)) continue;
+        const key = q.normalizedStem || q.stemText;
+        if (this._answeredQuestions.has(key)) continue;
 
-      const allSelected = this._getAllSelectedInputs(q);
+        const allSelected = this._getAllSelectedInputs(q);
 
-      if (mr.canAutoAnswer) {
-        // 已正确 → 跳过
-        if (allSelected.length > 0) {
-          const firstSel = allSelected[0];
-          if (this._isSameAnswer(firstSel, mr.bestAnswer, q)) {
+        if (mr.canAutoAnswer) {
+          // 已正确 → 跳过
+          if (allSelected.length > 0) {
+            const firstSel = allSelected[0];
+            if (this._isSameAnswer(firstSel, mr.bestAnswer, q)) {
+              this._answeredQuestions.add(key);
+              continue;
+            }
+          }
+          // 已有错误选择 → 跳过（不自动纠正，不锁住选项）
+          if (allSelected.length > 0 && !this._isSameAnswer(allSelected[0], mr.bestAnswer, q)) {
             this._answeredQuestions.add(key);
             continue;
           }
-        }
-        // 已有错误选择 → 跳过（不自动纠正，不锁住选项）
-        if (allSelected.length > 0 && !this._isSameAnswer(allSelected[0], mr.bestAnswer, q)) {
-          this._answeredQuestions.add(key);
-          continue;
-        }
 
-        // 空白 → 自动选择
-        await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
-        // sleep 期间用户可能切换了模式 → 放弃本次点击
-        if (this._mode !== 'stealth') return;
-        try {
-          const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
-          await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+          // 空白 → 自动选择
+          await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
+          // sleep 期间用户可能切换了模式 → 放弃本次点击
+          if (this._mode !== 'stealth') return;
+          try {
+            const bankOptions = (mr.results && mr.results[0]) ? (mr.results[0].options || null) : null;
+            await this._selectAnswers(q, mr.bestAnswer, bankOptions);
+            this._answeredQuestions.add(key);
+          } catch(e) { /* ignore */ }
+        } else {
           this._answeredQuestions.add(key);
-        } catch(e) { /* ignore */ }
-      } else {
-        this._answeredQuestions.add(key);
+        }
       }
+    } finally {
+      this._stealthRunning = false;
     }
 
     // 隐形模式无浮窗，不更新 UI
@@ -243,9 +252,11 @@ const ExamHelper = {
 
     // 题目集已变化（切科目/翻页/重开弹窗）→ 解除 hover 绑定锁，
     // 让 _bindHoverEvents 重新绑定到新题目的 DOM 上；同时清空作答记录，
-    // 避免同题干跨科目残留导致新题被误判为已答
+    // 避免同题干跨科目残留导致新题被误判为已答；并释放隐形作答并发锁，
+    // 保证切科目后新一轮作答循环能正常启动（旧循环可能仍卡在 sleep 中）
     this._hoverBound = false;
     this._answeredQuestions.clear();
+    this._stealthRunning = false;
 
     // 匹配
     const threshold = await this._getThreshold();
