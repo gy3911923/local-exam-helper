@@ -36,6 +36,8 @@ const ExamHelper = {
   _hoverBound: false, // 防止 MutationObserver 重绑事件
   _stealthRunning: false, // 隐形作答并发锁：防止多循环对同一题重复点击
   _stealthEpoch: 0, // 隐形作答会话代次：指纹变化时 ++，使旧循环在 await 醒来后自愈退出，杜绝残余并发窗口
+  _stealthDelaySec: 5, // 隐形作答题间延时（秒），Ctrl+↑/↓ 实时调整，运行中的循环每次 sleep 前动态读取
+  _lastSpeedKeyAt: 0, // 快捷键 repeat 节流时间戳
   _banksVersion: null, // 题库版本标记，避免每次重扫都走 IndexedDB
   _questionsFingerprint: null, // 题目集指纹，题目没变时跳过 matchAll
 
@@ -51,6 +53,9 @@ const ExamHelper = {
       const config = await storageGet(['matchThreshold', 'autoMode']);
       this._answerMode = config.autoMode || 'auto';
     } catch(e) { /* ignore */ }
+
+    // 注册答题速度快捷键 Ctrl+↑（加快）/ Ctrl+↓（减慢），考试中免开 popup
+    this._bindSpeedKeys();
 
     // 监听来自 background 的消息
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -119,11 +124,11 @@ const ExamHelper = {
       const parsed = Number(config.stealthDelay);
       if (parsed > 0 && parsed <= 60) delaySec = parsed;
     } catch(e) { /* ignore */ }
+    this._stealthDelaySec = delaySec;
 
-    // 在设定值 ±10% 范围内随机，模拟人类节奏
-    const minMs = Math.max(1000, Math.round(delaySec * 900));
-    const maxMs = Math.max(minMs + 1, Math.round(delaySec * 1100));
-    await this._autoAnswerStealth(minMs, maxMs);
+    // 逐题作答（延时在循环内每次 sleep 前动态读取 _stealthDelaySec，
+    // Ctrl+↑/↓ 调整后对正在运行的循环即时生效）
+    await this._autoAnswerStealth();
 
     // 隐形模式同样监听页面变化（切科目/重开弹窗时重新扫描并作答）
     this._startObserver();
@@ -131,10 +136,11 @@ const ExamHelper = {
 
   /**
    * 隐形模式作答：逐题回答，每题间隔随机延迟
+   * 延时动态取 _stealthDelaySec（Ctrl+↑/↓ 实时调整，运行中即时生效）
    */
-  async _autoAnswerStealth(minDelay = 2000, maxDelay = 5000) {
+  async _autoAnswerStealth() {
     // 并发锁：已有作答循环在运行则跳过，避免多循环对同一题重复点击
-    // （checkbox 多选重复 _toggleOption 会取消已选项；单选虽安全但没必要叠加）
+    // （checkbox 多选重复点击会取消已选项；单选虽安全但没必要叠加）
     if (this._stealthRunning) return;
     this._stealthRunning = true;
     // 会话代次：捕获当前代次。指纹变化会 ++，本循环在任意 await 醒来后若发现
@@ -171,8 +177,11 @@ const ExamHelper = {
             continue;
           }
 
-          // 空白 → 自动选择
-          await Helpers.sleep(Helpers.randomDelay(minDelay, maxDelay));
+          // 空白 → 自动选择（延时每次现算，Ctrl+↑/↓ 调整即时生效）
+          const sec = Math.max(1, Math.min(60, Number(this._stealthDelaySec) || 5));
+          const minMs = Math.max(1000, Math.round(sec * 900));
+          const maxMs = Math.max(minMs + 1, Math.round(sec * 1100));
+          await Helpers.sleep(Helpers.randomDelay(minMs, maxMs));
           // sleep 期间用户可能切换了模式 → 放弃本次点击
           if (this._mode !== 'stealth') return;
           // sleep 期间题目集可能已切换（指纹变化 ++）→ 让位于新循环
@@ -191,6 +200,68 @@ const ExamHelper = {
     }
 
     // 隐形模式无浮窗，不更新 UI
+  },
+
+  /**
+   * 答题速度快捷键：Ctrl+↑ 加快（题间延时 -1s）/ Ctrl+↓ 减慢（+1s）
+   * 范围 1-60 秒；normal/stealth 模式生效；运行中的 stealth 循环即时生效（下次 sleep 前现算）
+   */
+  _bindSpeedKeys() {
+    document.addEventListener('keydown', (e) => {
+      if (this._mode === 'off') return;
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      // 按住连发节流：keydown repeat ~30Hz，限 ~5.5 次/秒
+      if (e.repeat) {
+        const now = Date.now();
+        if (now - this._lastSpeedKeyAt < 180) return;
+      }
+      this._lastSpeedKeyAt = Date.now();
+      this._adjustSpeed(e.key === 'ArrowUp' ? -1 : 1);
+    });
+  },
+
+  /** 调整题间延时（秒）并持久化，附带轻提示 */
+  _adjustSpeed(delta) {
+    const cur = Number(this._stealthDelaySec) || 5;
+    const next = Math.max(1, Math.min(60, cur + delta));
+    if (next === cur) return;
+    this._stealthDelaySec = next;
+    // fire-and-forget：storageSet 已做 callback 包装，低版本 Chrome 安全
+    storageSet({ stealthDelay: next });
+    this._showSpeedTip(next);
+  },
+
+  /** 极简速度提示：右下角小字，700ms 自动消失（隐形模式用半透明深色，避免显眼） */
+  _showSpeedTip(sec) {
+    const px = '__leh_speed_tip__';
+    const old = document.getElementById(px);
+    if (old) old.remove();
+    const tip = document.createElement('div');
+    tip.id = px;
+    tip.textContent = '速度 ' + sec + ' 秒/题';
+    const stealth = this._mode === 'stealth';
+    Object.assign(tip.style, {
+      position: 'fixed',
+      right: '14px',
+      bottom: '14px',
+      background: stealth ? 'rgba(0,0,0,0.4)' : 'rgba(26,26,46,0.9)',
+      color: stealth ? '#cfd4dc' : '#fff',
+      padding: '3px 9px',
+      borderRadius: '5px',
+      fontSize: stealth ? '11px' : '12px',
+      lineHeight: '1.5',
+      zIndex: '2147483646',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',
+      pointerEvents: 'none',
+      opacity: '1',
+      transition: 'opacity 0.3s ease'
+    });
+    document.body.appendChild(tip);
+    setTimeout(() => {
+      tip.style.opacity = '0';
+      setTimeout(() => tip.remove(), 320);
+    }, 700);
   },
 
   /** 完全关闭 */
@@ -286,7 +357,7 @@ const ExamHelper = {
 
     // 隐形模式：题目集变化（切科目/重开弹窗）→ 对新增未答题目自动作答
     if (this._mode === 'stealth') {
-      this._autoAnswerStealth(2000, 5000).catch(() => {});
+      this._autoAnswerStealth().catch(() => {});
     }
   },
 
@@ -316,13 +387,24 @@ const ExamHelper = {
     }) || null;
   },
 
-  /** 选中/取消选中一个选项（单次点击，兼容 Element UI 和纯 HTML） */
-  _toggleOption(input) {
+  /**
+   * 确保选项被选中（幂等）
+   *
+   * 背景：旧实现 _toggleOption = input.click() + inner.click()。真实浏览器中
+   * .el-checkbox__inner 的 click 冒泡到 <label> 会触发隐式激活，再次转发 click 到
+   * input → checkbox 被 toggle 两次 = 选中即取消（多选题只漏选/全不选）。
+   * jsdom 不实现 label 隐式激活转发，故回归全绿而实战多选翻车（2026-09-02 实锤）。
+   * radio 重复点击安全故单选/判断题未暴露。
+   *
+   * 修复：仅当选项未选中时点一次 input.click()（原生 click 自带 change，足以驱动
+   * Vue/Element UI）；已选中则跳过——既防重复扫描把已选项取消，也保证多选逐个勾选稳定。
+   */
+  _ensureSelected(input) {
+    // 已选中（原生 checked 或 Element UI .is-checked）→ 幂等跳过，防止取消已选项
+    if (this._isInputCheckedInUI(input)) return;
     input.click();
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    // Element UI 需要点 inner 来触发 Vue 的响应
-    const inner = input.parentElement?.querySelector('.el-radio__inner, .el-checkbox__inner');
-    if (inner) inner.click();
+    // 不再点 .el-radio__inner/.el-checkbox__inner——label 隐式激活会二次 toggle checkbox
   },
 
   /** 根据答案文本选中所有对应选项
@@ -339,12 +421,12 @@ const ExamHelper = {
       for (const input of q.inputElements) {
         const raw = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
         const pure = TextNormalizer.normalize(raw);
-        if (pure === target) { this._toggleOption(input); return 1; }
+        if (pure === target) { this._ensureSelected(input); return 1; }
       }
       // 包含匹配回退
       for (const input of q.inputElements) {
         if (TextNormalizer.normalize(this._getInputLabel(input)).includes(target)) {
-          this._toggleOption(input);
+          this._ensureSelected(input);
           return 1;
         }
       }
@@ -366,7 +448,7 @@ const ExamHelper = {
           const rawLabel = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
           const pureLabel = TextNormalizer.normalize(rawLabel);
           if (pureLabel === bankText) {
-            this._toggleOption(input);
+            this._ensureSelected(input);
             usedInputs.add(input);
             clicked++;
             break;
@@ -386,7 +468,7 @@ const ExamHelper = {
           const rawLabel = this._getInputLabel(input).replace(/^[A-H][.、) ）、]/, '').trim();
           const pureLabel = TextNormalizer.normalize(rawLabel);
           if (pureLabel.includes(bankText)) { // >1 防止 "是"/"否" 误匹配
-            this._toggleOption(input);
+            this._ensureSelected(input);
             usedInputs.add(input);
             clicked++;
             break;
@@ -400,7 +482,7 @@ const ExamHelper = {
     // 单选 → 字母匹配回退
     if (answerLetters.length === 1) {
       const input = this._findInputByAnswer(q, answer);
-      if (input) { this._toggleOption(input); return 1; }
+      if (input) { this._ensureSelected(input); return 1; }
       return 0;
     }
 
@@ -410,7 +492,7 @@ const ExamHelper = {
       const labelText = this._getInputLabel(input);
       for (const letter of answerLetters) {
         if (labelText.startsWith(letter + '.') || labelText.startsWith(letter + '、') || labelText.startsWith(letter + ')') || labelText.startsWith(letter + ' ')) {
-          this._toggleOption(input);
+          this._ensureSelected(input);
           clicked++;
           break;
         }
