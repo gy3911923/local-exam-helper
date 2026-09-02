@@ -57,6 +57,16 @@ const ExamHelper = {
     // 注册答题速度快捷键 Ctrl+↑（加快）/ Ctrl+↓（减慢），考试中免开 popup
     this._bindSpeedKeys();
 
+    // popup 里手动改 stealthDelay 时，同步运行中的实例（storage 是唯一权威源）
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.stealthDelay && changes.stealthDelay.newValue) {
+          const v = Math.max(1, Math.min(60, Number(changes.stealthDelay.newValue) || 5));
+          this._stealthDelaySec = v;
+        }
+      });
+    } catch(e) { /* ignore */ }
+
     // 监听来自 background 的消息
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.action === 'setMode') {
