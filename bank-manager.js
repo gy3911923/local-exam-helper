@@ -38,19 +38,31 @@ const Helpers = {
  * Chrome 99 之前 chrome.runtime.sendMessage 不返回 Promise
  * → await 形式在 Chrome 93 得到 undefined → 全部导入失败
  * 用 callback 形式 + Promise 包装，所有版本通用
+ * 30s 超时保护：后台 service worker 异常（被杀/启动失败）时不再永久卡住，
+ * 超时报错并给出恢复指引（2026-09-09 同事 103/105"卡在导入"的防御闭环）
  */
-function sendMsg(msg) {
+function sendMsg(msg, timeoutMs = 30000) {
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      finish({ error: '后台无响应（等待 ' + Math.round(timeoutMs / 1000) + ' 秒超时）。请关闭本页重新打开题库管理；若仍失败，到 chrome://extensions 点击本扩展的刷新按钮后重试' });
+    }, timeoutMs);
     try {
       chrome.runtime.sendMessage(msg, (response) => {
         if (chrome.runtime.lastError) {
-          resolve({ error: chrome.runtime.lastError.message });
+          finish({ error: chrome.runtime.lastError.message });
           return;
         }
-        resolve(response);
+        finish(response);
       });
     } catch(e) {
-      resolve({ error: e.message || '消息发送失败' });
+      finish({ error: e.message || '消息发送失败' });
     }
   });
 }
