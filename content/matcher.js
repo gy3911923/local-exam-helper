@@ -11,6 +11,60 @@ const Matcher = {
   /** 默认置信度阈值（低于此值不自动作答） */
   DEFAULT_THRESHOLD: 0.6,
 
+  /** 3-gram 倒排索引缓存：{banksRef, flat, gramIndex} —— 万级题库防 O(M×N×len²) 卡死 */
+  _idx: null,
+
+  /**
+   * 为激活题库建 3-gram 倒排索引（惰性，banks 引用变化时重建）
+   * gram 命中数是编辑距离的粗下界信号：真匹配（≥0.49 收集线）必有可观的
+   * 3-gram 重叠，几乎无重叠者可安全跳过精确 DP（方向保守：宁多勿杀）
+   */
+  _buildIndex(banks) {
+    const flat = [];
+    const gramIndex = new Map();
+    for (const bank of banks) {
+      if (!bank.questions || !Array.isArray(bank.questions)) continue;
+      for (const bankQ of bank.questions) {
+        if (!bankQ.normalizedQ) bankQ.normalizedQ = TextNormalizer.normalize(bankQ.question || '');
+        const idx = flat.length;
+        flat.push({ bank, bankQ });
+        const q = bankQ.normalizedQ;
+        const seen = new Set();
+        for (let i = 0; i + 3 <= q.length; i++) {
+          const g = q.substr(i, 3);
+          if (seen.has(g)) continue;
+          seen.add(g);
+          let arr = gramIndex.get(g);
+          if (!arr) { arr = []; gramIndex.set(g, arr); }
+          arr.push(idx);
+        }
+      }
+    }
+    this._idx = { banksRef: banks, flat, gramIndex };
+  },
+
+  /** 取页面题的候选 bankQ（gram 命中数 top MAX_CAND，上限 800） */
+  _candidates(na, maxCand) {
+    const { flat, gramIndex } = this._idx;
+    const counts = new Map();
+    const seen = new Set();
+    for (let i = 0; i + 3 <= na.length; i++) {
+      const g = na.substr(i, 3);
+      if (seen.has(g)) continue;
+      seen.add(g);
+      const arr = gramIndex.get(g);
+      if (!arr) continue;
+      for (let j = 0; j < arr.length; j++) {
+        counts.set(arr[j], (counts.get(arr[j]) || 0) + 1);
+      }
+    }
+    // 全部候选若在上限内直接返回；超出则按命中数取 top（简单部分选择）
+    if (counts.size <= maxCand) return Array.from(counts.keys());
+    const arr = Array.from(counts.entries());
+    arr.sort((a, b) => b[1] - a[1]);
+    return arr.slice(0, maxCand).map(e => e[0]);
+  },
+
   /**
    * 匹配单个题目
    * @param {Object} question - {stemText, normalizedStem, options, type}
@@ -22,46 +76,52 @@ const Matcher = {
     const thr = threshold || this.DEFAULT_THRESHOLD;
     const allResults = [];
 
-    // 遍历所有激活题库
-    for (const bank of banks) {
-      if (!bank.questions || !Array.isArray(bank.questions)) continue;
+    // 索引失效（题库对象被重新加载）则重建
+    if (!this._idx || this._idx.banksRef !== banks) this._buildIndex(banks);
 
-      for (const bankQ of bank.questions) {
-        // 使用预归一化文本或现场归一化
-        const normalizedBankQ = bankQ.normalizedQ || TextNormalizer.normalize(bankQ.question || '');
-        let score = TextNormalizer.similarity(question.normalizedStem || '', normalizedBankQ);
+    // 页面题选项归一化：仅依赖 question，提到题库循环外（原先每对比对重复算一次）
+    const qKeys = question.options ? Object.keys(question.options).filter(k => question.options[k]) : [];
+    const qOpts = qKeys.map(k => TextNormalizer.normalize(question.options[k]));
 
-        // 选项重叠率加权：题干相同但选项不同时降低得分
-        // 仅当两侧选项数量相近时才加权，防止题库数据残缺误伤匹配
-        if (question.options && bankQ.options) {
-          const qKeys = Object.keys(question.options).filter(k => question.options[k]);
-          const bKeys = Object.keys(bankQ.options).filter(k => bankQ.options[k]);
-          if (qKeys.length >= 2 && bKeys.length >= 2 && bKeys.length >= qKeys.length * 0.5) {
-            const qOpts = qKeys.map(k => TextNormalizer.normalize(question.options[k]));
-            const bOpts = bKeys.map(k => TextNormalizer.normalize(bankQ.options[k]));
-            let overlap = 0;
-            for (const qo of qOpts) {
-              if (bOpts.some(bo => bo.includes(qo) || qo.includes(bo))) overlap++;
-            }
-            const overlapRate = overlap / Math.max(qOpts.length, bOpts.length);
-            score = score * 0.6 + overlapRate * 0.4;  // 题干60% + 选项40%
+    // 候选生成：3-gram 命中 top 800（而非全量 N 条逐一 DP）
+    const candIdxs = this._candidates(question.normalizedStem || '', 800);
+
+    for (const ci of candIdxs) {
+      const { bank, bankQ } = this._idx.flat[ci];
+      const normalizedBankQ = bankQ.normalizedQ;
+      // 已归一化文本直接比（免重复 normalize）+ 带收集线预筛
+      let score = TextNormalizer.similarityNormalized(question.normalizedStem || '', normalizedBankQ, thr * 0.7);
+
+      // 选项重叠率加权：题干相同但选项不同时降低得分
+      // 仅当两侧选项数量相近时才加权，防止题库数据残缺误伤匹配
+      if (qOpts.length && bankQ.options) {
+        const bKeys = Object.keys(bankQ.options).filter(k => bankQ.options[k]);
+        if (qOpts.length >= 2 && bKeys.length >= 2 && bKeys.length >= qOpts.length * 0.5) {
+          // 题库侧选项归一化缓存到 bankQ（跨页面题复用，原先每对比对重复算）
+          if (!bankQ._normOpts) bankQ._normOpts = bKeys.map(k => TextNormalizer.normalize(bankQ.options[k]));
+          const bOpts = bankQ._normOpts;
+          let overlap = 0;
+          for (const qo of qOpts) {
+            if (bOpts.some(bo => bo.includes(qo) || qo.includes(bo))) overlap++;
           }
+          const overlapRate = overlap / Math.max(qOpts.length, bOpts.length);
+          score = score * 0.6 + overlapRate * 0.4;  // 题干60% + 选项40%
         }
+      }
 
-        if (score >= thr * 0.7) {  // 0.7倍阈值收集，过滤完全不相关
-          allResults.push({
-            bankId: bank.id,
-            bankName: bank.name,
-            priority: bank.priority || 0,
-            questionId: bankQ.id,
-            stemText: bankQ.question,
-            answer: bankQ.answer,
-            options: bankQ.options,
-            analysis: bankQ.analysis || '',
-            type: bankQ.type,
-            score
-          });
-        }
+      if (score >= thr * 0.7) {  // 0.7倍阈值收集，过滤完全不相关
+        allResults.push({
+          bankId: bank.id,
+          bankName: bank.name,
+          priority: bank.priority || 0,
+          questionId: bankQ.id,
+          stemText: bankQ.question,
+          answer: bankQ.answer,
+          options: bankQ.options,
+          analysis: bankQ.analysis || '',
+          type: bankQ.type,
+          score
+        });
       }
     }
 
@@ -82,11 +142,34 @@ const Matcher = {
     return this._analyzeStatus(question, deduped, thr);
   },
 
-  /** 去重：题干重合度 > 95% 视为重复 */
+  /** 3-gram 集合（去重判定预筛用） */
+  _grams(s) {
+    const set = new Set();
+    for (let i = 0; i + 3 <= s.length; i++) set.add(s.substr(i, 3));
+    return set;
+  },
+
+  /** 去重：题干重合度 > 95% 视为重复
+   *  预筛两级：①长度差 >5% 必非重复 ②3-gram 重叠 <70% 必非重复
+   *  （0.95 相似度 ⇔ 编辑距离 ≤5%，两串几乎逐字相同 ⇒ gram 重叠必然 >80%）
+   *  垃圾候选场景收集量大，O(K²) 全量 DP 是分钟级卡死主因之一 */
   _deduplicate(results) {
     const kept = [];
     for (const r of results) {
-      const isDup = kept.some(k => TextNormalizer.isDuplicate(r.stemText, k.stemText));
+      const na = TextNormalizer.normalize(r.stemText);
+      const ga = this._grams(na);
+      let isDup = false;
+      for (const k of kept) {
+        if (!k._norm) k._norm = TextNormalizer.normalize(k.stemText);
+        const nb = k._norm;
+        const maxLen = Math.max(na.length, nb.length);
+        if (Math.abs(na.length - nb.length) > maxLen * 0.05) continue;
+        if (!k._grams) k._grams = this._grams(nb);
+        let common = 0;
+        for (const g of ga) if (k._grams.has(g)) common++;
+        if (common < ga.size * 0.7 && common < k._grams.size * 0.7) continue;
+        if (TextNormalizer.levenshtein(na, nb) <= maxLen * 0.05) { isDup = true; break; }
+      }
       if (!isDup) kept.push(r);
     }
     return kept;

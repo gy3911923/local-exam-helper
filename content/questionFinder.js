@@ -407,18 +407,13 @@ const QuestionFinder = {
 
   // ========== 辅助方法 ==========
 
-  /** 按DOM顺序排序 */
+  /** 按DOM顺序排序（compareDocumentPosition 两两比较，替代全文档节点建索引——
+   *  MHTML 快照页 DOM 数万节点，querySelectorAll('*') 建 Map 本身即秒级阻塞） */
   _sortByDOMOrder(questions) {
-    const elements = document.querySelectorAll('*');
-    const positions = new Map();
-    for (let i = 0; i < elements.length; i++) {
-      positions.set(elements[i], i);
-    }
-
+    const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
     return questions.sort((a, b) => {
-      const posA = positions.get(a.container) ?? Infinity;
-      const posB = positions.get(b.container) ?? Infinity;
-      return posA - posB;
+      if (!a.container || !b.container || a.container === b.container) return 0;
+      return (a.container.compareDocumentPosition(b.container) & FOLLOWING) ? -1 : 1;
     });
   },
 
