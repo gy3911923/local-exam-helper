@@ -273,6 +273,10 @@ async function handleImport(e) {
             const all = await sendMsg({ action: 'getAllBanks' }, 15000);
             const written = Array.isArray(all) && all.some(b => b && b.id === bank.id);
             if (!written) {
+              // 极端慢写残余窗口（>45s）：回查未命中但后台可能仍在写入——
+              // throw 前刷新内存列表，避免用户立即重导同一文件时因内存未含
+              // 该库而产生同名两份（Marvis 复核建议，v1.13.19）
+              try { await loadBanks(); } catch(e) { /* 刷新失败不掩盖原错误 */ }
               throw new Error(result && result.error ? `后台保存失败: ${result.error}` : '后台保存失败');
             }
           }
