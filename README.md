@@ -1,6 +1,6 @@
 # Local Exam Helper · 本地题库答题助手
 
-[![Version](https://img.shields.io/badge/version-1.13.19-brightgreen)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.14.0-brightgreen)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest%20V3-Chrome%2088+-green)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 
@@ -228,6 +228,7 @@ A: 考前将浏览器默认下载目录改为桌面。考试中按 `Ctrl+Shift+S
 
 | 版本 | 主要内容 |
 |---|---|
+| v1.14.0 | 里程碑聚合：跨入 1.14（1.13.x 连发 20 个 patch，patch 位已越过 minor 语义）。本版本聚合 09-02 以来的三大主线——①模式持久化（整页跳转自动恢复，实战"开始考试后插件失联"修复）②导入链防御（30s 超时 + 超时回查 + 极端慢写刷内存，同事 Chrome 103/105 卡导入排查闭环）③匹配引擎量级优化（万级题库 24 分钟卡死 → 15 秒，98×，语义严格等价）。1.14 发布审计：chrome.* 四种写法（裸 await/链式/裸调用/callback）全口径清零，无 Chrome 88 以下不兼容的现代 JS API，全量 JS 语法过，四套回归全绿 |
 | v1.13.20 | 匹配引擎量级优化：万级题库从"页面无响应 3 分钟"降到约 15 秒（基准 98×）。三层 O(N²) 叠加——题干×题库全量 O(len²) 编辑距离无预筛、已归一化文本被重复 normalize、选项文本每对比对重算 + 去重 O(K²) 全量 DP。修复：相似度双上界预筛（长度差严格上界 + bigram 公共度保守上界，上界低于收集线跳过 DP）· 3-gram 倒排索引取 top800 候选 · 选项归一化缓存 · 去重双预筛 · DOM 排序弃全文档节点索引。语义严格等价（无 cutoff 数学等价 201 对全等 / cutoff 0 误杀），四套回归全绿 |
 | v1.13.19 | saveBank 报失败前刷新内存列表（Marvis 复核 PASS 6/6 后采纳的非必须建议）：封堵">45s 极端慢写 + 不刷新页面立即重导同一文件 → 同名两份题库"的衍生场景 |
 | v1.13.18 | saveBank 超时后自动 getAllBanks 回查（15s）：IndexedDB put 一旦开始不因前端超时中断，实际入库即按成功判定，杜绝"误报失败→漏导入" |
