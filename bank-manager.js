@@ -267,7 +267,15 @@ async function handleImport(e) {
           const existingBanks = findDuplicateBanks(candidate.name, unique);
           const bank = createBank(candidate.name, unique);
           const result = await sendMsg({ action: 'saveBank', bank });
-          if (!result || !result.id) throw new Error(result && result.error ? `后台保存失败: ${result.error}` : '后台保存失败');
+          if (!result || !result.id) {
+            // 超时/报错后回查：后台写入可能实际已完成（IndexedDB put 一旦开始
+            // 不会因前端超时中断），按数据库实际内容判定，杜绝"误报失败→漏导入"
+            const all = await sendMsg({ action: 'getAllBanks' }, 15000);
+            const written = Array.isArray(all) && all.some(b => b && b.id === bank.id);
+            if (!written) {
+              throw new Error(result && result.error ? `后台保存失败: ${result.error}` : '后台保存失败');
+            }
+          }
 
           // 先保存新版本，再删除旧版本，避免覆盖失败时旧题库丢失
           await Promise.all(existingBanks.map(async existing => {
