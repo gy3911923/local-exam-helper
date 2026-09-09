@@ -57,9 +57,11 @@ const ExamHelper = {
     // 模式自动恢复：考试系统"开始考试"多为整页跳转/刷新 → content script 重载后
     // _mode 会回到默认 'off'。这里从 storage 读回上次开启的模式（带 host 校验，
     // 防止 A 站开启的状态误带到 B 站表单页），使同域跳转后插件自动续跑。
+    // location.host 为空（file://）不恢复：空 host 会匹配所有本地文件页，存在误启风险
     try {
       const saved = await storageGet(['mode', 'modeHost']);
-      if ((saved.mode === 'normal' || saved.mode === 'stealth') && saved.modeHost === location.host) {
+      if ((saved.mode === 'normal' || saved.mode === 'stealth') &&
+          location.host && saved.modeHost === location.host) {
         this._setMode(saved.mode);
       }
     } catch(e) { /* ignore */ }
@@ -76,11 +78,13 @@ const ExamHelper = {
           this._stealthDelaySec = v;
         }
         // mode 同步：同 host 下所有 frame（含 iframe 里的独立实例）一起切换，
-        // 解决"焦点在 iframe 内按键、iframe 实例仍是 off"的盲区
+        // 解决"焦点在 iframe 内按键、iframe 实例仍是 off"的盲区。
+        // location.host 为空（file://）不同步，与恢复逻辑同口径
         if (changes.mode && changes.mode.newValue) {
           const newMode = changes.mode.newValue;
           const host = (changes.modeHost && changes.modeHost.newValue) || '';
-          if ((newMode === 'normal' || newMode === 'stealth' || newMode === 'off') && host === location.host) {
+          if ((newMode === 'normal' || newMode === 'stealth' || newMode === 'off') &&
+              location.host && host === location.host) {
             this._setMode(newMode);
           }
         }
@@ -700,12 +704,6 @@ const ExamHelper = {
     } catch(e) {
       return 0.7;
     }
-  },
-
-  /** 设置模式 */
-  setMode(mode) {
-    this._mode = mode;
-    storageSet({ autoMode: mode });
   },
 
   /** 收集诊断数据（同步方法，分模块独立容错） */
