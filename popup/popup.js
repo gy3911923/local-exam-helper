@@ -19,6 +19,10 @@ function storageSet(obj) {
 document.addEventListener('DOMContentLoaded', () => {
   refreshUI();
 
+  // 底部版本号动态读取 manifest，升版无需再改 HTML
+  const footer = document.getElementById('footerVersion');
+  if (footer) footer.textContent = '纯本地 · 无外网 · 零切屏 · v' + chrome.runtime.getManifest().version;
+
   // 按钮事件绑定（替代内联onclick，因Manifest V3 CSP禁止内联脚本）
   const btnBank = document.getElementById('btnBankManager');
   const btnSettings = document.getElementById('btnSettings');
