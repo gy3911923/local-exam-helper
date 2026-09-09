@@ -54,15 +54,35 @@ const ExamHelper = {
       this._answerMode = config.autoMode || 'auto';
     } catch(e) { /* ignore */ }
 
+    // 模式自动恢复：考试系统"开始考试"多为整页跳转/刷新 → content script 重载后
+    // _mode 会回到默认 'off'。这里从 storage 读回上次开启的模式（带 host 校验，
+    // 防止 A 站开启的状态误带到 B 站表单页），使同域跳转后插件自动续跑。
+    try {
+      const saved = await storageGet(['mode', 'modeHost']);
+      if ((saved.mode === 'normal' || saved.mode === 'stealth') && saved.modeHost === location.host) {
+        this._setMode(saved.mode);
+      }
+    } catch(e) { /* ignore */ }
+
     // 注册答题速度快捷键 Ctrl+↑（加快）/ Ctrl+↓（减慢），考试中免开 popup
     this._bindSpeedKeys();
 
-    // popup 里手动改 stealthDelay 时，同步运行中的实例（storage 是唯一权威源）
+    // storage 跨实例联动（storage 是唯一权威源，popup/background/其他 frame 都经它同步）
     try {
       chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes.stealthDelay && changes.stealthDelay.newValue) {
+        if (area !== 'local') return;
+        if (changes.stealthDelay && changes.stealthDelay.newValue) {
           const v = Math.max(1, Math.min(60, Number(changes.stealthDelay.newValue) || 5));
           this._stealthDelaySec = v;
+        }
+        // mode 同步：同 host 下所有 frame（含 iframe 里的独立实例）一起切换，
+        // 解决"焦点在 iframe 内按键、iframe 实例仍是 off"的盲区
+        if (changes.mode && changes.mode.newValue) {
+          const newMode = changes.mode.newValue;
+          const host = (changes.modeHost && changes.modeHost.newValue) || '';
+          if ((newMode === 'normal' || newMode === 'stealth' || newMode === 'off') && host === location.host) {
+            this._setMode(newMode);
+          }
         }
       });
     } catch(e) { /* ignore */ }
@@ -215,12 +235,21 @@ const ExamHelper = {
   /**
    * 答题速度快捷键：Ctrl+↑ 加快（题间延时 -1s）/ Ctrl+↓ 减慢（+1s）
    * 范围 1-60 秒；normal/stealth 模式生效；运行中的 stealth 循环即时生效（下次 sleep 前现算）
+   * 监听挂 window + capture 阶段：优先于页面脚本捕获，防考试页防作弊脚本拦截 keydown
    */
   _bindSpeedKeys() {
-    document.addEventListener('keydown', (e) => {
-      if (this._mode === 'off') return;
-      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
-      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    window.addEventListener('keydown', (e) => {
+      const isSpeedKey = e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey &&
+                         (e.key === 'ArrowUp' || e.key === 'ArrowDown');
+      if (!isSpeedKey) return;
+
+      // 插件未开启：给引导而非静默（"考试开始后按了没反应"的困惑来源——
+      // 常见于整页跳转后 content 重载、_mode 回到 off）
+      if (this._mode === 'off') {
+        if (!e.repeat) this._showModeOffHint();
+        return;
+      }
+
       // 按住连发节流：keydown repeat ~30Hz，限 ~5.5 次/秒
       if (e.repeat) {
         const now = Date.now();
@@ -228,7 +257,7 @@ const ExamHelper = {
       }
       this._lastSpeedKeyAt = Date.now();
       this._adjustSpeed(e.key === 'ArrowUp' ? -1 : 1);
-    });
+    }, true);
   },
 
   /** 调整题间延时（秒）并持久化，附带轻提示 */
@@ -242,14 +271,14 @@ const ExamHelper = {
     this._showSpeedTip(next);
   },
 
-  /** 极简速度提示：右下角小字，700ms 自动消失（隐形模式用半透明深色，避免显眼） */
-  _showSpeedTip(sec) {
+  /** 通用轻提示：右下角小字，自动消失（隐形模式用半透明深色，避免显眼） */
+  _showTip(text, durationMs = 700) {
     const px = '__leh_speed_tip__';
     const old = document.getElementById(px);
     if (old) old.remove();
     const tip = document.createElement('div');
     tip.id = px;
-    tip.textContent = '速度 ' + sec + ' 秒/题';
+    tip.textContent = text;
     const stealth = this._mode === 'stealth';
     Object.assign(tip.style, {
       position: 'fixed',
@@ -271,7 +300,17 @@ const ExamHelper = {
     setTimeout(() => {
       tip.style.opacity = '0';
       setTimeout(() => tip.remove(), 320);
-    }, 700);
+    }, durationMs);
+  },
+
+  /** 极简速度提示 */
+  _showSpeedTip(sec) {
+    this._showTip('速度 ' + sec + ' 秒/题');
+  },
+
+  /** 插件未开启引导提示（off 状态按调速键的兜底，杜绝"按了没反应"的困惑） */
+  _showModeOffHint() {
+    this._showTip('插件未开启：Ctrl+Shift+E 普通 / Ctrl+Shift+H 后台', 1600);
   },
 
   /** 完全关闭 */

@@ -59,6 +59,11 @@ function tabsSendMsg(tabId, msg) {
   });
 }
 
+// 解析 tab.url 的 host（file:// 等无 host 时返回 ''）
+function hostOf(url) {
+  try { return new URL(url).host; } catch(e) { return ''; }
+}
+
 // 初始化存储默认值
 chrome.runtime.onInstalled.addListener(async (details) => {
   const defaults = {
@@ -106,7 +111,13 @@ chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chromeApi(chrome.tabs.query, { active: true, currentWindow: true });
   if (!tab) return;
   const tabId = tab.id;
-  const current = tabStates[tabId] || 'off';
+  // 优先问 content 实际状态：service worker 可能被回收导致 tabStates 失准，
+  // 若不校准会出现"从 stealth 想关、按一次没反应（实际已发 stealth），要按两次"的错乱
+  let current = tabStates[tabId] || 'off';
+  try {
+    const st = await tabsSendMsg(tabId, { action: 'getState' });
+    if (st && st.mode) current = st.mode;
+  } catch (e) { /* 页面无 content script → 用 tabStates */ }
 
   let newState;
   if (command === 'toggle-helper') {
@@ -227,7 +238,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 
   tabStates[tabId] = newState;
-  await storageSet({ mode: newState });
+  // modeHost 记录开启模式的站点：content 同域跳转后凭它自动恢复，跨站不误启
+  await storageSet({ mode: newState, modeHost: hostOf(tab.url) });
 
   try {
     await tabsSendMsg(tabId, {
@@ -259,7 +271,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'setMode') {
     chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
       tabStates[tab.id] = msg.mode || 'off';
-      await storageSet({ mode: msg.mode || 'off' });
+      await storageSet({ mode: msg.mode || 'off', modeHost: tab ? hostOf(tab.url) : '' });
       try {
         await tabsSendMsg(tab.id, {
           action: 'setMode',
